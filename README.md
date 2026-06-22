@@ -4,7 +4,7 @@
 
 `bpx_sdk_open` provides a lightweight C++ SDK for reading BPX robot state and sending motion-level or joint-level control commands.
 
-Current version: `1.0.4`
+Current version: `1.0.5`
 
 The SDK offers three usage modes:
 
@@ -96,6 +96,21 @@ Gait `bpx_sdk::MotionGait`:
 | `WalkPhase`    | `6`       |
 | `PoseTracking` | `7`       |
 | `Running`      | `8`       |
+
+### Gait Velocity Limits
+
+Velocity commands use `[x, y, yaw]`, where `x` and `y` are body-frame linear velocities in m/s and `yaw` is yaw rate in rad/s. The following values are the controller-side command limits for each gait:
+
+| Gait           | Velocity Limit `[x, y, yaw]` |
+| -------------- | ---------------------------- |
+| `Walk`         | `[1.5, 0.5, 2.0]`            |
+| `Bipedal`      | `[0.8, 0.5, 1.5]`            |
+| `Flip`         | `[0.0, 0.0, 0.0]`            |
+| `WalkPhase`    | `[1.5, 1.0, 2.0]`            |
+| `PoseTracking` | `[0.0, 0.0, 0.0]`            |
+| `Running`      | `x: [-1.5, 3.0]`, `y: [-1.0, 1.0]`, `yaw: [-2.0, 2.0]` |
+
+`Flip` does not use walking velocity commands. `PoseTracking` limits pose tracking commands instead of body velocity commands. For `Walk`, `Bipedal`, `WalkPhase`, and `Running`, lateral velocity and yaw rate are further reduced as `abs(x)` increases, so the table lists the per-axis base limits.
 
 ## State Query Layer
 
