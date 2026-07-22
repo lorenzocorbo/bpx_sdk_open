@@ -4,9 +4,9 @@
 
 `bpx_sdk_open` provides a lightweight C++ SDK for reading BPX robot state and sending motion-level or joint-level control commands.
 
-SDK version: `1.0.6`
+SDK version: `1.0.7`
 
-Documentation updated: `2026-07-07`
+Documentation updated: `2026-07-22`
 
 The SDK offers three usage modes:
 
@@ -99,6 +99,34 @@ Gait `bpx_sdk::MotionGait`:
 | `WalkPhase`    | `6`       |
 | `PoseTracking` | `7`       |
 | `Running`      | `8`       |
+
+### Gaits and Sub-gaits
+
+For some gaits, the main gait must be interpreted together with the sub-gait returned by `getSubGait()` to identify the specific action being executed:
+
+| Main Gait      | Main Raw Value | Sub-gait      | Sub-gait Raw Value | Description       |
+| -------------- | -------------- | ------------- | ------------------ | ----------------- |
+| `Walk`         | `0`            | —             | —                  | Walking           |
+| `Bipedal`      | `3`            | `F_HANDSTAND` | `-1`               | Inverted stance   |
+| `Bipedal`      | `3`            | `B_HANDSTAND` | `1`                | Upright stance    |
+| `Flip`         | `4`            | `GAIT_L_FLIP` | `-1`               | Left flip         |
+| `Flip`         | `4`            | `GAIT_R_FLIP` | `-2`               | Right flip        |
+| `WalkPhase`    | `6`            | `Pace`        | `2`                | Pace              |
+| `WalkPhase`    | `6`            | `Bound`       | `1`                | Bound             |
+| `WalkPhase`    | `6`            | `Pronk`       | `-1`               | Straight-leg jump |
+| `PoseTracking` | `7`            | —             | —                  | In-place twisting |
+| `Running`      | `8`            | `Run`         | `0`                | Running           |
+
+An em dash indicates that the main gait does not require a sub-gait to distinguish the action. `getSubGait(uint8_t*)` and
+`getSubGaitValue()` return `uint8_t`; negative raw sub-gait values must be interpreted as `int8_t`. For example,
+`-1` and `-2` are transmitted as `255` and `254`, respectively:
+
+```cpp
+uint8_t raw_sub_gait = 0;
+if (robot_state.getSubGait(&raw_sub_gait)) {
+    const int8_t sub_gait = static_cast<int8_t>(raw_sub_gait);
+}
+```
 
 Leg odometry `bpx_sdk::LegOdom`:
 
@@ -360,6 +388,37 @@ python3.11 scripts/build_wheels.py --cibuildwheel --out-dir wheelhouse
 ```
 
 Running `cibuildwheel` requires Python 3.11 or newer as the host interpreter.
+
+On Linux, the environment setup and release build can be run with one command:
+
+```bash
+./scripts/build_linux_wheels.sh
+```
+
+This command uses `uv` to create or reuse `.venv-cibw-linux` with Python 3.11 and
+`pip`, installs or upgrades `cibuildwheel<4`, and writes the wheels to
+`wheelhouse`. Pass a different output directory as the first argument if needed.
+
+On Windows, use the equivalent PowerShell script:
+
+```powershell
+.\scripts\build_windows_wheels.ps1
+```
+
+It uses `uv` to create or reuse `.venv-cibw-win` with Python 3.11 and writes the
+wheels to `wheelhouse`. Pass a different output directory as the first positional
+argument:
+
+```powershell
+.\scripts\build_windows_wheels.ps1 dist\wheels
+```
+
+To ignore proxy environment variables and the Windows system proxy for this build,
+use `-DisableProxy`. The original proxy settings are restored when the script exits:
+
+```powershell
+.\scripts\build_windows_wheels.ps1 -DisableProxy
+```
 
 On local macOS machines, `cibuildwheel` only uses python.org CPython framework installs.
 The build script skips configured CPython versions that are not installed locally. In

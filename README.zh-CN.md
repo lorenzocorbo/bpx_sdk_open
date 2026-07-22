@@ -4,9 +4,9 @@
 
 `bpx_sdk_open` 提供一个轻量级 C++ SDK，用于读取 BPX 机器人状态，并发送运动级或关节级控制指令。
 
-SDK 版本：`1.0.6`
+SDK 版本：`1.0.7`
 
-文档更新日期：`2026-07-07`
+文档更新日期：`2026-07-22`
 
 SDK 提供三种使用模式：
 
@@ -99,6 +99,34 @@ SDK 提供类型安全的运动状态和步态枚举，可用于读取当前/上
 | `PoseTracking` | `7` |
 | `Running`      | `8` |
 
+### 主步态与子步态
+
+部分主步态需要结合 `getSubGait()` 返回的子步态值，才能确定机器人当前执行的具体动作：
+
+| 主步态            | 主步态原始值 | 子步态          | 子步态原始值 | 说明   |
+| -------------- | ------ | ------------ | ------- | ---- |
+| `Walk`         | `0`    | —            | —       | 行走   |
+| `Bipedal`      | `3`    | `F_HANDSTAND` | `-1`    | 倒立   |
+| `Bipedal`      | `3`    | `B_HANDSTAND` | `1`     | 正立   |
+| `Flip`         | `4`    | `GAIT_L_FLIP` | `-1`    | 左侧翻  |
+| `Flip`         | `4`    | `GAIT_R_FLIP` | `-2`    | 右侧翻  |
+| `WalkPhase`    | `6`    | `Pace`        | `2`     | 遛步   |
+| `WalkPhase`    | `6`    | `Bound`       | `1`     | 跳跃   |
+| `WalkPhase`    | `6`    | `Pronk`       | `-1`    | 直腿跳  |
+| `PoseTracking` | `7`    | —            | —       | 原地扭动 |
+| `Running`      | `8`    | `Run`         | `0`     | 奔跑   |
+
+表中的“—”表示该主步态不需要通过子步态进一步区分。`getSubGait(uint8_t*)` 和
+`getSubGaitValue()` 返回的是 `uint8_t`；子步态原始值为负数时，应按 `int8_t` 解释，例如
+`-1` 和 `-2` 在线上传输后分别对应 `255` 和 `254`：
+
+```cpp
+uint8_t raw_sub_gait = 0;
+if (robot_state.getSubGait(&raw_sub_gait)) {
+    const int8_t sub_gait = static_cast<int8_t>(raw_sub_gait);
+}
+```
+
 腿部里程计 `bpx_sdk::LegOdom`：
 
 | 字段                 | 长度  | 说明                         |
@@ -122,6 +150,34 @@ SDK 提供类型安全的运动状态和步态枚举，可用于读取当前/上
 | `Running`      | `x: [-1.5, 3.0]`，`y: [-1.0, 1.0]`，`yaw: [-2.0, 2.0]` |
 
 `Flip` 不使用行走速度指令。`PoseTracking` 限制的是原地扭动指令，不是机身移动速度。对于 `Walk`、`Bipedal`、`WalkPhase` 和 `Running`，横向速度和偏航角速度会随着 `abs(x)` 增大进一步收缩，因此表中列出的是各轴基础限幅。
+
+#### `Walk` 步态起步阈值
+
+通过 `MotionLevelControl::setVelocity(x, y, yaw)` 发送绝对速度值前，必须先调用
+`setVelocityControlFlag(true)`。`setVelocity()` 不会自动开启该模式；未开启时，传入的三个参数不会被按绝对速度值使用。
+
+```cpp
+motion.setVelocityControlFlag(true);
+motion.setVelocity(0.3f, 0.0f, 0.0f);
+```
+
+`Walk` 控制器会先对速度指令进行限幅、轴间约束和平滑处理，然后对处理后的速度
+`[vx, vy, yaw]` 进行以下判断：
+
+```text
+sqrt(vx² + vy² + yaw²) < 0.2
+```
+
+满足该条件时，控制器会将周期步态相位输入置零，机器人通常保持站立而不会起步。这不是 SDK 丢弃指令或将速度直接清零，而是 `Walk` 策略的低速静止处理。
+
+当指令未触发限幅且速度平滑过程已稳定时，上述判断可近似理解为直接作用于 `setVelocity(vx, vy, yaw)` 的三个参数：
+
+- 仅使用单轴指令时，`vx`、`vy` 或 `yaw` 的理论起步边界均为数值 `0.2`。`vx`、`vy` 的单位为 m/s，`yaw` 的单位为 rad/s。
+- 这是三轴合成阈值，不是要求每个轴都达到 `0.2`。例如 `[0.15, 0.15, 0.0]` 的计算结果约为 `0.212`，已超过阈值；`[0.1, 0.1, 0.1]` 的计算结果约为 `0.173`，仍处于低速静止范围。
+- 判断条件是严格的小于 `0.2`，但不建议依赖恰好 `0.2` 的边界值。单轴起步测试建议使用绝对值 `0.25`～`0.3`。
+- 由于存在速度平滑，发送指令后的前几个控制周期中，处理后的速度可能仍小于 `0.2`，起步会有短暂延迟。
+
+注意：上述公式按数值直接合成单位为 m/s 的线速度与单位为 rad/s 的角速度，它是当前控制器的阈值规则，不是具有统一物理单位的速度模长。
 
 ## 状态查询层
 
@@ -363,6 +419,36 @@ python3.11 scripts/build_wheels.py --cibuildwheel --out-dir wheelhouse
 ```
 
 运行 `cibuildwheel` 时，宿主 Python 解释器需要为 3.11 或更新版本。
+
+在 Linux 上，可以用一条命令完成环境准备和 release wheel 构建：
+
+```bash
+./scripts/build_linux_wheels.sh
+```
+
+该命令会使用 `uv` 创建或复用基于 Python 3.11 且包含 `pip` 的
+`.venv-cibw-linux`，安装或升级 `cibuildwheel<4`，并将 wheel 输出到
+`wheelhouse`。如需更改输出目录，可将目录路径作为第一个参数传入。
+
+在 Windows 上，可使用对应的 PowerShell 脚本：
+
+```powershell
+.\scripts\build_windows_wheels.ps1
+```
+
+该脚本会使用 `uv` 创建或复用基于 Python 3.11 的 `.venv-cibw-win`，并将
+wheel 输出到 `wheelhouse`。如需更改输出目录，可将目录路径作为第一个位置参数传入：
+
+```powershell
+.\scripts\build_windows_wheels.ps1 dist\wheels
+```
+
+如需在本次构建中忽略代理环境变量和 Windows 系统代理，可使用
+`-DisableProxy`；脚本退出时会恢复原来的代理配置：
+
+```powershell
+.\scripts\build_windows_wheels.ps1 -DisableProxy
+```
 
 在本地 macOS 上，`cibuildwheel` 只会使用 python.org 安装包提供的 CPython
 Framework。构建脚本会自动跳过本机未安装的 CPython 版本；GitHub Actions 中仍会构建完整配置矩阵。

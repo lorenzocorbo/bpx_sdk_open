@@ -101,3 +101,10 @@ endfunction()
 add_bpx_sdk_example(request_robot_state_example example/request_robot_state_example.cpp)
 add_bpx_sdk_example(motion_level_control_example example/motion_level_control_example.cpp)
 add_bpx_sdk_example(joint_level_control_example example/joint_level_control_example.cpp)
+
+# Allow the installed SDK repository to add downstream-only targets without
+# carrying their sources in this upstream package.
+include(
+    "${CMAKE_CURRENT_LIST_DIR}/cmake/bpx_sdk_open_extensions.cmake"
+    OPTIONAL
+)
