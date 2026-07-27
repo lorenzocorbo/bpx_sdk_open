@@ -34,6 +34,7 @@ public:
 
 private:
     uint8_t hostServerMode() const override;
+    void onStateConnectionChanged(bool connected) override;
 
     class Impl;
     std::unique_ptr<Impl> impl_;

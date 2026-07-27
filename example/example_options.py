@@ -30,6 +30,13 @@ def _positive_uint16(text):
     return value
 
 
+def _state_rate(text):
+    value = _positive_uint16(text)
+    if value > 200:
+        raise argparse.ArgumentTypeError("expected a value in range 1..200")
+    return value
+
+
 def parse_options(enable_joint_state_port=False):
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -57,9 +64,9 @@ def parse_options(enable_joint_state_port=False):
     parser.add_argument(
         "--state-rate",
         dest="state_rate_hz",
-        type=_positive_uint16,
+        type=_state_rate,
         default=100,
-        help="Requested robot state upload rate (default: 100)",
+        help="Requested robot state upload rate, 1..200 (default: 100)",
     )
     if enable_joint_state_port:
         parser.add_argument(

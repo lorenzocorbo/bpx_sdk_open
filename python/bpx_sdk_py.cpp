@@ -363,6 +363,14 @@ PyObject* state_disconnect(PyObject* self, PyObject*) {
     Py_RETURN_NONE;
 }
 
+PyObject* state_is_connected(PyObject* self, PyObject*) {
+    RequestRobotState* cpp = state_cpp(self);
+    if (!cpp) {
+        return nullptr;
+    }
+    return py_bool(cpp->isConnected());
+}
+
 PyObject* state_set_robot_ip(PyObject* self, PyObject* args) {
     RequestRobotState* cpp = state_cpp(self);
     if (!cpp) {
@@ -690,6 +698,7 @@ PyMethodDef StateMethods[] = {
     {"__exit__", reinterpret_cast<PyCFunction>(state_exit), METH_VARARGS, nullptr},
     {"connect", reinterpret_cast<PyCFunction>(state_connect), METH_NOARGS, nullptr},
     {"disconnect", reinterpret_cast<PyCFunction>(state_disconnect), METH_NOARGS, nullptr},
+    {"isConnected", reinterpret_cast<PyCFunction>(state_is_connected), METH_NOARGS, nullptr},
     METHOD("setRobotIp", state_set_robot_ip, METH_VARARGS, nullptr),
     METHOD("setRobotStateUploadPort", state_set_robot_state_upload_port, METH_VARARGS, nullptr),
     METHOD("setRobotStateUploadRate", state_set_robot_state_upload_rate, METH_VARARGS, nullptr),
@@ -727,6 +736,7 @@ PyMethodDef MotionMethods[] = {
     {"__exit__", reinterpret_cast<PyCFunction>(state_exit), METH_VARARGS, nullptr},
     {"connect", reinterpret_cast<PyCFunction>(state_connect), METH_NOARGS, nullptr},
     {"disconnect", reinterpret_cast<PyCFunction>(state_disconnect), METH_NOARGS, nullptr},
+    {"isConnected", reinterpret_cast<PyCFunction>(state_is_connected), METH_NOARGS, nullptr},
     METHOD("setRobotIp", state_set_robot_ip, METH_VARARGS, nullptr),
     METHOD("setRobotStateUploadPort", state_set_robot_state_upload_port, METH_VARARGS, nullptr),
     METHOD("setRobotStateUploadRate", state_set_robot_state_upload_rate, METH_VARARGS, nullptr),
@@ -781,6 +791,7 @@ PyMethodDef JointMethods[] = {
     {"__exit__", reinterpret_cast<PyCFunction>(state_exit), METH_VARARGS, nullptr},
     {"connect", reinterpret_cast<PyCFunction>(state_connect), METH_NOARGS, nullptr},
     {"disconnect", reinterpret_cast<PyCFunction>(state_disconnect), METH_NOARGS, nullptr},
+    {"isConnected", reinterpret_cast<PyCFunction>(state_is_connected), METH_NOARGS, nullptr},
     METHOD("setRobotIp", state_set_robot_ip, METH_VARARGS, nullptr),
     METHOD("setRobotStateUploadPort", state_set_robot_state_upload_port, METH_VARARGS, nullptr),
     METHOD("setRobotStateUploadRate", state_set_robot_state_upload_rate, METH_VARARGS, nullptr),

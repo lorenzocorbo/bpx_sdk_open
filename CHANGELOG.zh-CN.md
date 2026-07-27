@@ -9,6 +9,45 @@
 
 ## [未发布]
 
+## [1.0.8] - 2026-07-24
+
+### 新增
+
+- 增加可靠的 TCP 后台自动重连和有上限的退避机制，并通过 C++ 和 Python
+  API 的 `isConnected()` 报告实时连接状态。
+- 每次确认连接及重连成功后自动同步机器人时间。仅当绝对时间偏差超过10分钟
+  时，机器人使用 SDK 时间更新 Linux `CLOCK_REALTIME` 和硬件 RTC。
+- 支持在 1 至 200 Hz 范围内配置普通机器人状态上传频率，同时保留各状态组
+  自身的原生频率上限。
+- 增加机器人状态上传频率测试，以及 C++ 和 Python TCP 重连监测程序。
+
+### 变更
+
+- `connect()` 现在只表示启动后台“期望连接”，不再保证返回时 TCP 已实际连通；
+  发送控制指令前应等待 `isConnected()` 返回已连接。
+- 每次建立新的运动控制会话时先发送完整零指令；应用必须重新发送控制指令，
+  非零目标才可恢复。
+- 关节控制不再重放断开前的指令；重连后必须重新发送完整关节帧或零指令。
+- 显式断开运动控制时，尽力发送一次目标值全零的运动指令。
+- 将随附的 Linux x86_64、aarch64 SDK 库和 CPython 3.8 至 3.14 release
+  wheel 更新至 1.0.8。
+- 更新随附的 Windows x86_64 SDK DLL 和导入库，并增加适用于 CPython 3.8
+  至 3.14 的 1.0.8 Windows AMD64 wheel。
+- 更新随附的 macOS arm64 SDK 库，并增加适用于 CPython 3.8 至 3.14 的 
+  1.0.8 macOS 11+ arm64 wheel。
+- 将运动级 Python 示例的偏航速度调整为 0.2 rad/s，并将演示时间延长至30秒。
+
+### 修复
+
+- 确保 `setZeroPositionsFlag()` 不会生成保留的零标记，避免机器人静默忽略
+  零位准备请求。
+
+### 移除
+
+- 移除 C++ 和 Python 显式机器人授时 API 及其示例。应用只需调用
+  `connect()`，SDK 会自动执行授时。
+- 移除仓库中的 1.0.7 wheel，改为提供 1.0.8 Linux wheel。
+
 ## [1.0.7] - 2026-07-22
 
 ### 新增
@@ -128,7 +167,8 @@
 - 首次提供用于机器人状态查询、运动级控制和关节级控制的 C++ SDK。
 - 首次提供 Linux x86_64 和 aarch64 共享库、CMake 配置及 C++ 示例。
 
-[未发布]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.7...HEAD
+[未发布]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.8...HEAD
+[1.0.8]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/mirrormerobotics/bpx_sdk_open/releases/tag/v1.0.6
 [1.0.4]: https://github.com/mirrormerobotics/bpx_sdk_open/releases/tag/v1.0.4

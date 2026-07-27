@@ -4,9 +4,9 @@
 
 `bpx_sdk_open` provides a lightweight C++ SDK for reading BPX robot state and sending motion-level or joint-level control commands.
 
-SDK version: `1.0.7`
+SDK version: `1.0.8`
 
-Documentation updated: `2026-07-22`
+Documentation updated: `2026-07-24`
 
 The SDK offers three usage modes:
 
@@ -44,6 +44,10 @@ bpx_sdk_open/
     motion_level_control_example.py
     joint_level_control_example.cpp
     joint_level_control_example.py
+  testcase/
+    state_upload_rate_test.py
+    tcp_reconnect_monitor.py
+    tcp_reconnect_monitor_example.cpp
 ```
 
 ## General Configuration
@@ -175,6 +179,26 @@ if (!robot_state.connect()) {
     return 1;
 }
 ```
+
+`setRobotStateUploadRate()` requests an upper limit for ordinary UDP state packets sent from the robot to the SDK client; it does not control the SDK-to-robot motion command rate. Call it before `connect()`. The valid range is 1--200 Hz, the default is 100 Hz, and the robot falls back to 100 Hz for invalid values. A change made while connected takes effect after disconnecting and reconnecting.
+
+`connect()` starts a desired connection. If the robot is temporarily unavailable, the SDK reconnects in the background with bounded backoff from 100 ms to 2 s; use `isConnected()` for the live TCP state. The connection is reported live only after the first complete robot response. A bounded response deadline also discards a half-open socket and starts reconnection when Wi-Fi loss, power loss, or a hard robot reboot produces no TCP FIN/RST. Explicit `disconnect()`, object destruction, or process exit stops all retries. Every confirmed connection and background reconnection automatically sends one time-sync request on the active TCP session. Reconnection never restores a pre-disconnect non-zero motion or joint target.
+
+Each new motion-control TCP session first sends a complete zero command. The application must explicitly call a new motion-control API after that baseline before a non-zero target can resume. Joint control never replays the old frame after reconnect: call `setJointCommand()` with a new complete frame (or `setZeroJointCommand()`) first; partial joint setters return `false` until then.
+
+Each ordinary state group keeps its native cap, so its effective rate is `min(requested rate, native cap)`: joints 1000 Hz, IMU 200 Hz, leg odometry 50 Hz, motion state 10 Hz, and battery/temperature 1 Hz. The joint-control `HighRate` channel is independent of this setting. Command-line examples accept the same setting through `--state-rate 50`.
+
+### Automatic robot time synchronization after connection
+
+Applications only need to call `connect()`. After the first complete subscription response confirms a live connection, the SDK automatically sends the development host's current epoch on the same TCP session. Every successful background reconnection sends it again. The auxiliary request does not change the active control mode, and a time-sync policy or application failure does not turn an established control connection into a connection failure.
+
+The robot uses one absolute-offset threshold of ten minutes. It does not step the clock at or below ten minutes; above ten minutes it applies SDK time to both Linux `CLOCK_REALTIME` and the UTC hardware RTC. NTP state is reported for diagnostics but no longer blocks an SDK correction above the threshold. Threshold skips, permission errors, and partial RTC failures are returned and logged by the robot. The SDK no longer exposes an explicit time-sync API; normal applications only need to call `connect()`.
+
+The packaged robot configuration enables automatic time sync for a trusted robot network. The current protocol has no authentication, so untrusted networks must disable `sdk_time_sync_enabled` in robot configuration. Error code `9` means an unknown NTP state and `10` means an RTC write/readback failure. Protocol revision 2 intentionally rejects revision-1 clients because the old response cannot safely express policy skips or partial RTC application.
+
+The S-06 native libraries in this repository have currently been updated only for Linux x86_64/AArch64. The bundled legacy Windows/macOS binaries do not yet provide this API; do not link calls to it on those platforms until matching binaries are released.
+
+Robot control timeouts and arbitration continue to use a monotonic clock. The API does not synchronize MCU, IMU, or joint-device clocks and does not replace continuous NTP/chrony service.
 
 Main state APIs:
 

@@ -18,8 +18,12 @@ public:
 
     virtual bool connect();
     virtual void disconnect();
+    bool isConnected() const;
     void setRobotStateUploadPort(uint16_t);
     virtual void setJointStateUploadPort(uint16_t);
+    // Request the robot-to-SDK ordinary UDP state upload rate. Call before
+    // connect(); valid range is 1..200 Hz and the robot falls back to 100 Hz
+    // for invalid values. Per-state-group native rate caps still apply.
     void setRobotStateUploadRate(uint16_t rate_hz);
     void setTcpLocalPort(uint16_t port);
     void setSessionId(uint16_t);
@@ -105,6 +109,7 @@ public:
 
 protected:
     virtual uint8_t hostServerMode() const;
+    virtual void onStateConnectionChanged(bool connected);
     const char* robotIp() const;
 
 private:

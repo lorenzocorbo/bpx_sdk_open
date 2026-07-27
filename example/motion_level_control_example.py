@@ -124,13 +124,13 @@ def main():
 
             elif phase == DemoPhase.YAW_VELOCITY:
                 if not phase_announced:
-                    print("send yaw velocity command for 3 seconds")
+                    print("send yaw velocity command for 30 seconds")
                     phase_announced = True
 
-                if not motion_level_control.setVelocity(0.0, 0.0, 1.0):
+                if not motion_level_control.setVelocity(0.0, 0.0, 0.2):
                     raise RuntimeError("failed to send yaw velocity command")
 
-                if phase_elapsed >= 3.0:
+                if phase_elapsed >= 30.0:
                     phase = DemoPhase.ZERO_VELOCITY
                     phase_start = now
                     phase_announced = False

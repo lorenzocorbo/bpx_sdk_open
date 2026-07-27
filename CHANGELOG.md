@@ -9,6 +9,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-07-24
+
+### Added
+
+- Add resilient background TCP reconnection with bounded backoff and live
+  connection-state reporting through `isConnected()` in the C++ and Python
+  APIs.
+- Add automatic robot time synchronization after every confirmed connection
+  and reconnection. The robot applies SDK time to Linux `CLOCK_REALTIME` and
+  the hardware RTC only when the absolute offset exceeds ten minutes.
+- Add configurable ordinary robot-state upload rates from 1 to 200 Hz while
+  preserving the native rate cap of each state group.
+- Add hardware-oriented tests for robot-state upload rates and TCP reconnection
+  monitoring in C++ and Python.
+
+### Changed
+
+- Make `connect()` start a desired background connection instead of
+  guaranteeing an immediately live TCP session; callers should wait for
+  `isConnected()` before issuing control commands.
+- Start every new motion-control session with a complete zero command and
+  require a new application command before a non-zero target can resume.
+- Prevent joint control from replaying the command from a disconnected session;
+  a new complete joint frame or zero command is required after reconnection.
+- Send a best-effort motion command with zero target values when motion control
+  is explicitly disconnected.
+- Update the bundled Linux x86_64 and aarch64 SDK libraries and release wheels
+  to version 1.0.8 for CPython 3.8 through 3.14.
+- Update the bundled Windows x86_64 SDK DLL and import library, and add
+  version 1.0.8 Windows AMD64 wheels for CPython 3.8 through 3.14.
+- Update the bundled macOS arm64 SDK library, and add version 1.0.8 macOS 11+ 
+  arm64 wheels for CPython 3.8 through 3.14.
+- Limit the motion-level Python example's yaw command to 0.2 rad/s and extend
+  its demonstration interval to 30 seconds.
+
+### Fixed
+
+- Ensure `setZeroPositionsFlag()` never generates the reserved zero tag,
+  preventing zero-position preparation requests from being silently ignored
+  by the robot.
+
+### Removed
+
+- Remove the explicit C++ and Python robot time-synchronization APIs and their
+  examples. Applications only need to call `connect()` because synchronization
+  is performed automatically.
+- Remove the checked-in 1.0.7 wheel set in favor of the 1.0.8 Linux wheels.
+
 ## [1.0.7] - 2026-07-22
 
 ### Added
@@ -141,7 +189,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial Linux x86_64 and aarch64 shared libraries, CMake configuration, and
   C++ examples.
 
-[Unreleased]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.7...HEAD
+[Unreleased]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.8...HEAD
+[1.0.8]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/mirrormerobotics/bpx_sdk_open/releases/tag/v1.0.6
 [1.0.4]: https://github.com/mirrormerobotics/bpx_sdk_open/releases/tag/v1.0.4
