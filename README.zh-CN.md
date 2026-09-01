@@ -540,3 +540,9 @@ joint.setJointCommand(kp, zeros, kd, zeros, zeros)
 ## 运行说明
 
 SDK 通过网络与 BPX 实现通讯。请根据「网络连接与 IP」选用正确的机器人 IP；若与 `DEFAULT_SERVER_IP` 不同，请在连接前通过 `setRobotIp` 进行设置。运行程序前，建议先在开发主机上 `ping` 该 IP，确认网络连通后再调用 `connect()`。
+
+## 许可证
+
+BPX SDK Open 使用 Apache License 2.0。该许可证覆盖本仓库发布的源码、头文件、
+示例、Python 绑定、预编译 BPX SDK 原生库和 wheel。详情见 [LICENSE](LICENSE)、
+[NOTICE](NOTICE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

@@ -153,6 +153,8 @@ setup(
     name="bpx-sdk-open",
     version=read_sdk_version(),
     description="Python bindings for BPX SDK Open",
+    license="Apache-2.0",
+    license_files=("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"),
     packages=["bpx_sdk"],
     package_data={"bpx_sdk": ["lib/*.so", "lib/*.dylib", "lib/*.dll", "py.typed", "__init__.pyi"]},
     ext_modules=[

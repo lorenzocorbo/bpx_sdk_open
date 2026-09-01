@@ -514,3 +514,10 @@ Examples:
 ## Running
 
 The SDK communicates with the BPX over the network. Choose the correct robot IP per [Network Connection and IP](#network-connection-and-ip); if it differs from `DEFAULT_SERVER_IP`, call `setRobotIp` before connecting. Before running your program, `ping` that IP from the development host to verify network connectivity, then call `connect()`.
+
+## License
+
+BPX SDK Open is licensed under the Apache License 2.0. The license covers the
+source code, headers, examples, Python bindings, precompiled BPX SDK libraries,
+and wheels distributed in this repository. See [LICENSE](LICENSE),
+[NOTICE](NOTICE), and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
