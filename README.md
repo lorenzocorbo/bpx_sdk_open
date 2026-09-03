@@ -85,13 +85,13 @@ The SDK provides type-safe motion state and gait enumerations for reading the cu
 
 Motion state `bpx_sdk::MotionState`:
 
-| Enum Value   | Raw Value | Description   |
-| ------------ | --------- | ------------- |
-| `LyingDown`  | `0`       | Lying down.   |
-| `StandingUp` | `1`       | Standing up.  |
-| `Passive`    | `2`       | Passive mode. |
-| `SitDown`    | `3`       | Sitting down. |
-| `Motion`     | `6`       | In motion.    |
+| Enum Value   | Raw Value | Description              |
+| ------------ | --------- | ------------------------ |
+| `LyingDown`  | `0`       | Already lying down.      |
+| `StandingUp` | `1`       | Standing up.             |
+| `Passive`    | `2`       | Passive mode.            |
+| `SitDown`    | `3`       | Lying down in progress.  |
+| `Motion`     | `6`       | In motion.               |
 
 Gait `bpx_sdk::MotionGait`:
 
