@@ -222,10 +222,19 @@ int main(int argc, char** argv) {
 
     printRobotVersion(joint_level_control);
 
+    // connect() starts the TCP subscription asynchronously.  Do not use the
+    // first high-rate UDP state as proof that JointLevelControl is ready to
+    // accept a command: setJointCommand() rejects commands until this TCP
+    // connection has completed its handshake.
+    std::cout << "waiting for TCP control connection..." << std::endl;
+    while (!joint_level_control.isConnected()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
     std::array<float, 12> init_pos{};
+    std::cout << "waiting for initial high-rate joint position..." << std::endl;
     while (!joint_level_control.getJointPositionHighRate(init_pos.data())) {
-        std::cout << "waiting for initial high-rate joint position..." << std::endl;
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
     const auto first_target_pos = makeLegTarget(0.0f, 0.8f, -1.8f);
