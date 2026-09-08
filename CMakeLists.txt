@@ -101,6 +101,12 @@ endfunction()
 add_bpx_sdk_example(request_robot_state_example example/request_robot_state_example.cpp)
 add_bpx_sdk_example(motion_level_control_example example/motion_level_control_example.cpp)
 add_bpx_sdk_example(joint_level_control_example example/joint_level_control_example.cpp)
+add_bpx_sdk_example(motion_level_control_server_example example/motion_level_control_server_example.cpp)
+add_bpx_sdk_example(motion_level_control_client_example example/motion_level_control_client_example.cpp)
+if(WIN32)
+    target_link_libraries(motion_level_control_server_example PRIVATE ws2_32)
+    target_link_libraries(motion_level_control_client_example PRIVATE ws2_32)
+endif()
 
 # Allow the installed SDK repository to add downstream-only targets without
 # carrying their sources in this upstream package.

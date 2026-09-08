@@ -4,9 +4,9 @@
 
 `bpx_sdk_open` provides a lightweight C++ SDK for reading BPX robot state and sending motion-level or joint-level control commands.
 
-SDK version: `1.0.8`
+SDK version: `1.0.9`
 
-Documentation updated: `2026-07-24`
+Documentation updated: `2026-09-08`
 
 The SDK offers three usage modes:
 
@@ -17,6 +17,10 @@ The SDK offers three usage modes:
 | Joint Control Layer  | Sends 12-DOF joint target and torque feedforward commands directly, while reading both standard state and high-rate joint state. |
 
 The SDK interfaces and state fields are still in an early implementation stage. More APIs and readable robot state fields will be added over time.
+
+## Before You Start
+
+Update the SDK and ensure your robot firmware supports the features you intend to use.
 
 ## Directory Structure
 
@@ -103,6 +107,7 @@ Gait `bpx_sdk::MotionGait`:
 | `WalkPhase`    | `6`       |
 | `PoseTracking` | `7`       |
 | `Running`      | `8`       |
+| `Jump` | `12` |
 
 ### Gaits and Sub-gaits
 
@@ -120,6 +125,11 @@ For some gaits, the main gait must be interpreted together with the sub-gait ret
 | `WalkPhase`    | `6`            | `Pronk`       | `-1`               | Straight-leg jump |
 | `PoseTracking` | `7`            | —             | —                  | In-place twisting |
 | `Running`      | `8`            | `Run`         | `0`                | Running           |
+| `Jump` | `12` | `UpJump` | `0` | Upward jump |
+| `Jump` | `12` | `FrontJump` | `1` | Forward jump |
+| `Jump` | `12` | `BackJump` | `2` | Backward jump |
+| `Jump` | `12` | `LeftJump` | `-1` | Leftward jump |
+| `Jump` | `12` | `RightJump` | `-2` | Rightward jump |
 
 An em dash indicates that the main gait does not require a sub-gait to distinguish the action. `getSubGait(uint8_t*)` and
 `getSubGaitValue()` return `uint8_t`; negative raw sub-gait values must be interpreted as `int8_t`. For example,
@@ -196,7 +206,7 @@ The robot uses one absolute-offset threshold of ten minutes. It does not step th
 
 The packaged robot configuration enables automatic time sync for a trusted robot network. The current protocol has no authentication, so untrusted networks must disable `sdk_time_sync_enabled` in robot configuration. Error code `9` means an unknown NTP state and `10` means an RTC write/readback failure. Protocol revision 2 intentionally rejects revision-1 clients because the old response cannot safely express policy skips or partial RTC application.
 
-The S-06 native libraries in this repository have currently been updated only for Linux x86_64/AArch64. The bundled legacy Windows/macOS binaries do not yet provide this API; do not link calls to it on those platforms until matching binaries are released.
+Automatic time synchronization requires a supporting SDK version for your platform.
 
 Robot control timeouts and arbitration continue to use a monotonic clock. The API does not synchronize MCU, IMU, or joint-device clocks and does not replace continuous NTP/chrony service.
 
@@ -240,6 +250,52 @@ which return `MotionState` or `MotionGait` directly.
 
 Example: `example/request_robot_state_example.cpp`
 
+### Robot Serial Number and Model (C++)
+
+`RequestRobotState` and its derived classes `MotionLevelControl` and `JointLevelControl` provide:
+
+| API | Description |
+| --- | --- |
+| `getRobotSerialNumber(std::string*)` | Reads the original whole-robot SN; returns `true` on success. |
+| `getRobotModel(RobotModel*)` | Reads the model identified by the robot hardware. |
+| `getRobotSerialNumberValue()` | Returns `std::optional<std::string>`. |
+| `getRobotModelValue()` | Returns `std::optional<RobotModel>`. |
+| `getControlMode(ControlMode*)` | Reads the current control mode; returns `true` on success. |
+| `getControlModeValue()` | Returns `std::optional<ControlMode>`. |
+
+`RobotModel` is defined in `include/motion_types.h`:
+
+| Enum | SDK Enum Value |
+| --- | --- |
+| `Unknown` | `0` |
+| `BPX` | `1` |
+| `BPXPro` | `2` |
+| `BPW` | `3` |
+
+The SN identifies the whole robot.
+
+```cpp
+// Call from the state-reading loop after connect().
+auto sn = robot_state.getRobotSerialNumberValue();
+auto model = robot_state.getRobotModelValue();
+if (sn && model) {
+    // An empty *sn means the robot could not read its SN; *model is the detected model.
+}
+```
+
+`connect()` attempts to retrieve identity synchronously before returning. Getters return `false` / `std::nullopt` if the query fails or the firmware does not support it.
+An empty SN means the serial number is unavailable; `Unknown` means the model is unknown.
+Identity is printed once when successfully retrieved during connection setup or automatic reconnection:
+
+```text
+robot identity: SN=BPX-example-SN, model=BPX-Pro
+```
+
+The current control mode updates with state feedback and is available through `getControlMode()`
+or `getControlModeValue()`. `ControlMode` values are `Unknown=0`, `RemoteControl=1` (app/remote
+controller), and `Navigator=2` (navigation). Missing feedback or disconnection returns
+`false` / `std::nullopt`.
+
 ## Motion Control Layer
 
 Header: `include/motion_level_control.h`
@@ -276,6 +332,11 @@ Control APIs:
 | `setRightFlip()`                           | Requests a right flip.                                                                 |
 | `setBipedal()`                             | Switches to bipedal gait.                                                              |
 | `setInvBipedal()`                          | Switches to inverted bipedal gait.                                                     |
+| `setUpJump()` | Requests a BPX upward jump. |
+| `setFrontJump()` | Requests a BPX forward jump. |
+| `setBackJump()` | Requests a BPX backward jump. |
+| `setLeftJump()` | Requests a BPX leftward jump. |
+| `setRightJump()` | Requests a BPX rightward jump. |
 | `setPronk()`                               | Switches to Pronk jumping gait.                                                        |
 | `setPace()`                                | Switches to Pace gait.                                                                 |
 | `setBound()`                               | Switches to Bound gait.                                                                |
@@ -283,6 +344,12 @@ Control APIs:
 | `setStandUp()`                             | Requests stand mode.                                                                   |
 | `setSitDown()`                             | Requests sit mode.                                                                     |
 | `setDamping()`                             | Requests joint damping mode.                                                           |
+
+The five directional jump APIs are available for BPX. Call them after connection, while the robot
+is in motion mode and commanded velocity is zero. Each call requests one jump.
+`setPronk()` selects the Pronk gait. `setBipedal()` / `setInvBipedal()` are available for BPX;
+BPX-Pro does not support upright or inverted stance.
+
 
 Before calling `setZeroPositionsFlag()`, ensure the robot's feet, shanks, and the joints between shanks and thighs are all in contact with the ground.
 `example/motion_level_control_example.cpp` sends a zeroing command at startup by default, so before running
@@ -383,6 +450,51 @@ After building, the example executables are located in `build/`.
 
 CMake automatically links the shared library for the current system architecture. Modify `CMakeLists.txt` if you have other linking or build requirements.
 
+### Python Jump and State APIs
+
+`RequestRobotState`, `MotionLevelControl`, and `JointLevelControl` provide
+`getRobotSerialNumber()` and `getRobotModel()`. They return a string and a model integer,
+respectively, or `None` when identity is unavailable. An empty string means the SN is unavailable.
+
+```python
+# Use in the state-reading loop after connecting robot.
+sn = robot.getRobotSerialNumber()
+model = robot.getRobotModel()
+if sn is not None and model is not None:
+    print(sn, bpx_sdk.RobotModel(model).name)
+```
+
+Model values are `RobotModel.Unknown = 0`, `BPX = 1`, `BPXPro = 2`, and `BPW = 3`.
+Use `model is not None` to check availability, since `Unknown` has value `0`.
+
+All three classes also provide `getControlMode()`, returning a control-mode integer or `None`
+when feedback is unavailable or the connection is lost.
+
+```python
+mode = robot.getControlMode()
+if mode is not None:
+    print(bpx_sdk.ControlMode(mode).name)
+```
+
+`ControlMode` values are `Unknown=0`, `RemoteControl=1`, and `Navigator=2`.
+
+`getChargerIn1()` and `getChargerIn2()` return `0` (removed), `1` (inserted), or `None`
+when feedback is unavailable. The C++ and Python examples display both values in their state output.
+
+`MotionLevelControl` provides five jump methods, all returning `None`:
+
+| Method | Action |
+| --- | --- |
+| `setUpJump()` | Upward jump |
+| `setFrontJump()` | Forward jump |
+| `setBackJump()` | Backward jump |
+| `setLeftJump()` | Leftward jump |
+| `setRightJump()` | Rightward jump |
+
+These actions are available for BPX. Call them after connection, while the robot is in motion mode
+and commanded velocity is zero. Each call requests one jump. The gait is `MotionGait.Jump = 12`.
+Install the updated Python package and ensure the robot firmware supports the features you use.
+
 ### Python Bindings
 
 The Python bindings are provided by the `bpx_sdk` package and link directly against the C++ shared library shipped in this repository. Install them with:
@@ -448,7 +560,7 @@ On local macOS machines, `cibuildwheel` only uses python.org CPython framework i
 The build script skips configured CPython versions that are not installed locally. In
 GitHub Actions, the full configured CPython matrix is built.
 
-The GitHub Actions workflow in `.github/workflows/build-wheels.yml` builds wheel artifacts for Windows AMD64, Linux x86_64/aarch64, and macOS arm64. Run it manually from the Actions tab or push a `v*` tag. The generated wheels are uploaded as workflow artifacts and can be installed with:
+The GitHub Actions workflow in `.github/workflows/build-wheels.yml` builds wheels in four parallel jobs: Windows AMD64, Linux x86_64, Linux aarch64, and macOS arm64. Linux uses native `ubuntu-22.04` and `ubuntu-22.04-arm` runners, one architecture per job, without QEMU emulation. Run it manually from the Actions tab or push a `v*` tag. The generated wheels are uploaded as workflow artifacts and can be installed with:
 
 ### 通过脚本远程构建并下载 wheels
 
@@ -459,7 +571,7 @@ The GitHub Actions workflow in `.github/workflows/build-wheels.yml` builds wheel
 ```
 
 Windows 可使用 `python scripts/build_wheels_github.py --ref master`。
-脚本会触发 `build-wheels.yml`，等待三端构建成功，下载并解压 Actions artifact，
+脚本会触发 `build-wheels.yml`，等待四个平台任务构建成功，下载并解压 Actions artifact，
 将 `.whl` 文件汇总到本仓库的 `wheelhouse/`；wheel 本身保持原样，供 pip 安装。
 可用 `--out-dir` 指定输出目录，路径含空格时加引号：
 
@@ -478,9 +590,11 @@ Windows 可使用 `python scripts/build_wheels_github.py --ref master`。
 百分比按各平台已结束步骤的比例等权计算（含失败、跳过步骤），未出现的平台按 0% 计，
 不代表真实编译量、成功率或剩余时间。`Build wheels` 内部包含多个 Python 版本的构建，
 GitHub 的步骤接口不提供其内部百分比，因此该阶段可能长时间保持同一比例；耗时仍会更新。
-失败时会显示异常步骤及任务链接。查询进度详情暂时失败不影响继续等待整体构建状态。
+失败时会显示异常步骤及任务链接。查询状态和任务详情遇到临时网络故障会自动重试，直到原有等待超时。
+支持的终端中进度原地刷新，运行中和取消显示黄色、成功显示绿色、失败显示红色。
+重定向输出保留逐次日志，重定向或设置 `NO_COLOR` 时关闭颜色。
 
-三端产物先下载到临时目录，再检查 wheel ZIP 完整性、元数据、包版本一致性，以及
+四个平台产物先下载到临时目录，再检查 wheel ZIP 完整性、元数据、包版本一致性，以及
 Linux x86_64/aarch64、Windows AMD64、macOS arm64 平台覆盖。全部通过后才写入输出目录。
 同名 wheel 会替换，其他文件保留；不会自动安装 Python 包。现有 workflow 负责完整的
 CPython 构建矩阵及 wheel 导入测试，下载脚本不重复验证每个 Python 版本。
@@ -569,6 +683,26 @@ Examples:
 ## Running
 
 The SDK communicates with the BPX over the network. Choose the correct robot IP per [Network Connection and IP](#network-connection-and-ip); if it differs from `DEFAULT_SERVER_IP`, call `setRobotIp` before connecting. Before running your program, `ping` that IP from the development host to verify network connectivity, then call `connect()`.
+
+### Server/client examples
+
+`motion_level_control_server_example` owns the SDK connection and accepts text commands from a client. C++ and Python clients and servers are interchangeable. Start one server, then run a client in another terminal:
+
+```bash
+# C++ (from the repository root)
+./build/motion_level_control_server_example --robot-ip 192.168.1.143
+./build/motion_level_control_client_example status
+
+# Python (install the Python SDK first; use instead of the C++ server above)
+python3 example/motion_level_control_server_example.py --robot-ip 192.168.1.143
+python3 example/motion_level_control_client_example.py status
+```
+
+The server listens on `127.0.0.1:50051` by default. For separate machines, set the server's `--listen-ip` and the client's `--server-ip`; use `--listen-port` and `--server-port` to change the port. This example has no authentication and is intended for trusted networks. The server handles client connections sequentially; running a client without a command starts interactive mode.
+
+`status` reports connection status, SN, model, ControlMode, motion state, gait, maximum velocity, battery level/current, and both charger inputs. Missing fields show `<unavailable>`. The server prints status every second with a local timestamp including milliseconds, keeping `battery_level`, `battery_current`, `charger_in1`, and `charger_in2` on the same line.
+
+Commands include `zero`, `stand`, `sit`, `damping`, `stop`, `velocity X Y YAW`, `velocity-control on|off`, and `gait NAME`. For BPX, `jump up|front|back|left|right` selects the five jump directions. Available actions depend on the robot model. Use the client’s `-h`/`--help` to view all commands without connecting. While connected, use `help` to list commands and gait/jump choices; `quit` (or `shutdown`) stops the server. An `OK` response means the server handled the command, not that the robot completed the action.
 
 ## License
 

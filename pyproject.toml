@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [tool.cibuildwheel]
 build = "cp38-* cp39-* cp310-* cp311-* cp312-* cp313-* cp314-*"
 skip = "*-musllinux*"
-test-command = "python -c \"import bpx_sdk; print('ok')\""
+test-command = "python {project}/testcase/python_api_smoke_test.py"
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64", "aarch64"]

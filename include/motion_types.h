@@ -8,6 +8,19 @@ namespace bpx_sdk {
 
 constexpr int kJointCount = 12;
 
+enum class ControlMode : uint8_t {
+    Unknown = 0,
+    RemoteControl = 1,
+    Navigator = 2,
+};
+
+enum class RobotModel : uint8_t {
+    Unknown = 0,
+    BPX = 1,
+    BPXPro = 2,
+    BPW = 3,
+};
+
 enum class MotionState : uint8_t {
     LyingDown = 0,
     StandingUp = 1,
@@ -23,6 +36,7 @@ enum class MotionGait : uint8_t {
     WalkPhase = 6,
     PoseTracking = 7,
     Running = 8,
+    Jump = 12,
 };
 
 enum class JointIndex : uint8_t {

@@ -1,6 +1,7 @@
 #include "motion_level_control.h"
 #include "bpx_sdk_version.h"
 #include "example_options.h"
+#include "example_feedback.h"
 
 #include <chrono>
 #include <cstdint>
@@ -89,6 +90,7 @@ int main(int argc, char** argv) {
     }
 
     printRobotVersion(motion_level_control);
+    bpx_sdk::example::printIdentityAvailability(motion_level_control);
 
     std::cout << "motion level control running" << std::endl;
     DemoPhase phase = DemoPhase::kWait;
@@ -107,8 +109,14 @@ int main(int argc, char** argv) {
         if (has_motion_state) {
             std::cout << "motion_state=" << static_cast<uint32_t>(current_state)
                       << " gait=" << static_cast<uint32_t>(current_gait)
+                      << " control_mode=" << bpx_sdk::example::formatControlMode(motion_level_control)
+                      << " " << bpx_sdk::example::formatPowerState(motion_level_control)
                       << " max_vel=(" << max_vel[0] << ", "
                       << max_vel[1] << ", " << max_vel[2] << ")"
+                      << std::endl;
+        } else {
+            std::cout << "control_mode=" << bpx_sdk::example::formatControlMode(motion_level_control)
+                      << " " << bpx_sdk::example::formatPowerState(motion_level_control)
                       << std::endl;
         }
 

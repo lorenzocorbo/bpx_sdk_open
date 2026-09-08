@@ -4,9 +4,9 @@
 
 `bpx_sdk_open` 提供一个轻量级 C++ SDK，用于读取 BPX 机器人状态，并发送运动级或关节级控制指令。
 
-SDK 版本：`1.0.8`
+SDK 版本：`1.0.9`
 
-文档更新日期：`2026-07-24`
+文档更新日期：`2026-09-08`
 
 SDK 提供三种使用模式：
 
@@ -17,6 +17,10 @@ SDK 提供三种使用模式：
 | 关节控制层 | 直接发送 12 自由度关节目标和力矩前馈指令，同时可读取普通状态和高频关节状态。 |
 
 当前 SDK 接口和状态字段仍为初步实现，后续会逐步丰富可用接口和可读取的机器人状态。
+
+## 使用须知
+
+使用前请确认 SDK 与机器人固件版本匹配。
 
 ## 目录结构
 
@@ -102,6 +106,7 @@ SDK 提供类型安全的运动状态和步态枚举，可用于读取当前/上
 | `WalkPhase`    | `6` |
 | `PoseTracking` | `7` |
 | `Running`      | `8` |
+| `Jump` | `12` |
 
 ### 主步态与子步态
 
@@ -119,6 +124,11 @@ SDK 提供类型安全的运动状态和步态枚举，可用于读取当前/上
 | `WalkPhase`    | `6`    | `Pronk`       | `-1`    | 直腿跳  |
 | `PoseTracking` | `7`    | —            | —       | 原地扭动 |
 | `Running`      | `8`    | `Run`         | `0`     | 奔跑   |
+| `Jump` | `12` | `UpJump` | `0` | 向上跳 |
+| `Jump` | `12` | `FrontJump` | `1` | 向前跳 |
+| `Jump` | `12` | `BackJump` | `2` | 向后跳 |
+| `Jump` | `12` | `LeftJump` | `-1` | 向左跳 |
+| `Jump` | `12` | `RightJump` | `-2` | 向右跳 |
 
 表中的“—”表示该主步态不需要通过子步态进一步区分。`getSubGait(uint8_t*)` 和
 `getSubGaitValue()` 返回的是 `uint8_t`；子步态原始值为负数时，应按 `int8_t` 解释，例如
@@ -223,7 +233,7 @@ if (!robot_state.connect()) {
 
 机器人随包配置在受信网络中默认启用自动授时。现有协议没有身份认证，非受信网络必须在机器人配置中关闭 `sdk_time_sync_enabled`。错误码 `9` 表示 NTP 状态未知，`10` 表示 RTC 写入或回读失败；第二版协议会明确拒绝第一版客户端，因为旧响应无法安全表达策略跳过和 RTC 部分应用。
 
-当前仓库中的 S-06 原生库只更新了 Linux x86_64/AArch64；随包提供的 Windows/macOS 旧二进制尚不包含该 API，请勿在这些平台链接调用，需等待对应平台重新发布。
+自动授时需要所用平台的 SDK 版本支持。
 
 自动授时连接示例：
 控制超时和仲裁继续使用单调时钟；该接口不会同步 MCU、IMU 或关节设备时钟，也不能替代 NTP/chrony 持续授时。
@@ -268,6 +278,51 @@ SDK 也提供返回数组、结构体或数值的可选辅助接口，例如 `ge
 
 示例文件：`example/request_robot_state_example.cpp`
 
+### 整机 SN 与机型（C++）
+
+`RequestRobotState` 及其派生类 `MotionLevelControl`、`JointLevelControl` 提供：
+
+| 接口 | 说明 |
+| --- | --- |
+| `getRobotSerialNumber(std::string*)` | 读取整机原始 SN，成功返回 `true`。 |
+| `getRobotModel(RobotModel*)` | 读取机器人硬件识别出的机型。 |
+| `getRobotSerialNumberValue()` | 返回 `std::optional<std::string>`。 |
+| `getRobotModelValue()` | 返回 `std::optional<RobotModel>`。 |
+| `getControlMode(ControlMode*)` | 读取当前控制模式，成功返回 `true`。 |
+| `getControlModeValue()` | 返回 `std::optional<ControlMode>`。 |
+
+`RobotModel` 定义于 `include/motion_types.h`：
+
+| 枚举 | SDK 枚举值 |
+| --- | --- |
+| `Unknown` | `0` |
+| `BPX` | `1` |
+| `BPXPro` | `2` |
+| `BPW` | `3` |
+
+SN 为整机序列号。
+
+```cpp
+// 在 connect() 后的状态读取循环中调用。
+auto sn = robot_state.getRobotSerialNumberValue();
+auto model = robot_state.getRobotModelValue();
+if (sn && model) {
+    // *sn 为空表示机器人未读到 SN；*model 为识别出的机型。
+}
+```
+
+`connect()` 返回前会尝试同步获取身份信息；查询失败或固件不支持时返回 `false` / `std::nullopt`。
+空 SN 表示序列号不可用，`Unknown` 表示机型未知。
+连接初始化和自动重连时，成功获取身份信息后打印一次：
+
+```text
+robot identity: SN=BPX-example-SN, model=BPX-Pro
+```
+
+当前控制模式随状态反馈更新，可通过 `getControlMode()` 或 `getControlModeValue()` 读取。
+`ControlMode` 取值为 `Unknown=0`、`RemoteControl=1`（APP/遥控器）、`Navigator=2`（导航）。
+未收到有效反馈或断连时返回 `false` / `std::nullopt`。
+
 ## 运控调用层
 
 头文件：`include/motion_level_control.h`
@@ -304,6 +359,11 @@ if (!motion.connect()) {
 | `setRightFlip()`                           | 请求右侧翻动作。                       |
 | `setBipedal()`                             | 切换到双足正立步态。                     |
 | `setInvBipedal()`                          | 切换到双足倒立步态。                     |
+| `setUpJump()` | 请求 BPX 向上跳。 |
+| `setFrontJump()` | 请求 BPX 向前跳。 |
+| `setBackJump()` | 请求 BPX 向后跳。 |
+| `setLeftJump()` | 请求 BPX 向左跳。 |
+| `setRightJump()` | 请求 BPX 向右跳。 |
 | `setPronk()`                               | 切换到 Pronk 跳跃步态。                |
 | `setPace()`                                | 切换到 Pace 步态。                   |
 | `setBound()`                               | 切换到 Bound 步态。                  |
@@ -311,6 +371,11 @@ if (!motion.connect()) {
 | `setStandUp()`                             | 请求站立模式。                        |
 | `setSitDown()`                             | 请求坐下模式。                        |
 | `setDamping()`                             | 请求关节阻尼模式。                      |
+
+五种定向跳跃适用于 BPX。连接就绪后，在机器人进入运动模式且速度指令为零时调用。
+每次调用请求一次跳跃。`setPronk()` 用于切换 Pronk 步态。
+`setBipedal()` / `setInvBipedal()` 适用于 BPX，BPX-Pro 不支持正立和倒立。
+
 
 使用 `setZeroPositionsFlag()` 标零前，必须确认机器人足底、小腿以及小腿和大腿连接处均接触地面。
 `example/motion_level_control_example.cpp` 默认会在程序开始阶段发送标零指令，因此运行
@@ -411,6 +476,50 @@ cmake --build build\windows_x64_examples
 
 CMake 会根据当前系统架构自动链接对应的动态库。如有其他链接或构建需求，请修改 `CMakeLists.txt`。
 
+### Python 跳跃与状态查询
+
+`RequestRobotState`、`MotionLevelControl` 和 `JointLevelControl` 均提供
+`getRobotSerialNumber()` 和 `getRobotModel()`：前者返回字符串，后者返回机型整数；
+未获取到身份信息时返回 `None`。空字符串表示 SN 不可用。
+
+```python
+# 在已连接对象的状态读取循环中使用。
+sn = robot.getRobotSerialNumber()
+model = robot.getRobotModel()
+if sn is not None and model is not None:
+    print(sn, bpx_sdk.RobotModel(model).name)
+```
+
+机型枚举为 `RobotModel.Unknown = 0`、`BPX = 1`、`BPXPro = 2`、`BPW = 3`。
+判断是否收到机型时请使用 `model is not None`，因为 `Unknown` 的值是 `0`。
+
+这三个类也提供 `getControlMode()`，返回控制模式整数；未收到反馈或断连时返回 `None`。
+
+```python
+mode = robot.getControlMode()
+if mode is not None:
+    print(bpx_sdk.ControlMode(mode).name)
+```
+
+`ControlMode` 取值为 `Unknown=0`、`RemoteControl=1`、`Navigator=2`。
+
+`getChargerIn1()`、`getChargerIn2()` 返回 `0`（未插入）或 `1`（已插入），尚无反馈时返回 `None`。
+C++ 和 Python 示例均在状态输出中显示这两个值。
+
+`MotionLevelControl` 提供五个跳跃方法，返回值均为 `None`：
+
+| 方法 | 动作 |
+| --- | --- |
+| `setUpJump()` | 向上跳 |
+| `setFrontJump()` | 向前跳 |
+| `setBackJump()` | 向后跳 |
+| `setLeftJump()` | 向左跳 |
+| `setRightJump()` | 向右跳 |
+
+这些动作适用于 BPX。连接就绪后，在机器人进入运动模式且速度指令为零时调用；
+每次调用请求一次跳跃。对应步态为 `MotionGait.Jump = 12`。
+使用前请安装更新后的 Python 包，并确认机器人固件支持相应功能。
+
 ### Python 调用库
 
 Python 封装位于 `bpx_sdk` 包中，直接链接当前项目自带的 C++ 动态库。安装：
@@ -478,7 +587,7 @@ wheel 输出到 `wheelhouse`。如需更改输出目录，可将目录路径作�
 在本地 macOS 上，`cibuildwheel` 只会使用 python.org 安装包提供的 CPython
 Framework。构建脚本会自动跳过本机未安装的 CPython 版本；GitHub Actions 中仍会构建完整配置矩阵。
 
-`.github/workflows/build-wheels.yml` 中的 GitHub Actions 工作流会构建 Windows AMD64、Linux x86_64/aarch64 和 macOS arm64 的 wheel 产物。可以在 Actions 页面手动触发，也可以推送 `v*` 标签触发。生成的 wheel 会作为工作流产物上传，安装方式如下：
+`.github/workflows/build-wheels.yml` 中的 GitHub Actions 工作流通过四个并行任务构建 Windows AMD64、Linux x86_64、Linux aarch64 和 macOS arm64 的 wheel 产物。Linux 分别使用原生 `ubuntu-22.04` 和 `ubuntu-22.04-arm` runner，每个任务只构建对应架构，无需 QEMU 模拟。可以在 Actions 页面手动触发，也可以推送 `v*` 标签触发。生成的 wheel 会作为工作流产物上传，安装方式如下：
 
 ```bash
 pip3 install --no-index --find-links wheelhouse bpx-sdk-open
@@ -540,6 +649,26 @@ joint.setJointCommand(kp, zeros, kd, zeros, zeros)
 ## 运行说明
 
 SDK 通过网络与 BPX 实现通讯。请根据「网络连接与 IP」选用正确的机器人 IP；若与 `DEFAULT_SERVER_IP` 不同，请在连接前通过 `setRobotIp` 进行设置。运行程序前，建议先在开发主机上 `ping` 该 IP，确认网络连通后再调用 `connect()`。
+
+### Server/client 示例
+
+`motion_level_control_server_example` 持有 SDK 连接，client 通过文本命令控制服务端。C++ 和 Python 客户端、服务端可以交叉使用。先启动一个服务端，再在另一终端运行客户端：
+
+```bash
+# C++（在仓库根目录运行）
+./build/motion_level_control_server_example --robot-ip 192.168.1.143
+./build/motion_level_control_client_example status
+
+# Python（先安装 Python SDK；与上述 C++ 服务端二选一）
+python3 example/motion_level_control_server_example.py --robot-ip 192.168.1.143
+python3 example/motion_level_control_client_example.py status
+```
+
+服务端默认监听 `127.0.0.1:50051`。跨机器使用时，服务端通过 `--listen-ip` 指定监听地址，客户端通过 `--server-ip` 指定服务端地址；端口分别使用 `--listen-port` 和 `--server-port`。该示例没有认证，仅适用于可信网络。一个服务端依次处理客户端连接；客户端不带命令时进入交互模式。
+
+`status` 返回连接状态、SN、机型、ControlMode、运动状态、步态、最大速度以及电池和充电状态；暂不可用的字段显示 `<unavailable>`。服务端每秒打印带本机毫秒时间戳的状态，`battery_level`、`battery_current`、`charger_in1` 和 `charger_in2` 位于同一行。
+
+支持 `zero`、`stand`、`sit`、`damping`、`stop`、`velocity X Y YAW`、`velocity-control on|off` 和 `gait NAME`；`jump up|front|back|left|right` 分别对应向上、向前、向后、向左、向右跳跃（BPX）。实际可用动作以机型支持为准。客户端 `-h`/`--help` 可在不连接服务端时查看完整命令；连接后输入 `help` 可查看命令及全部步态、跳跃选项，`quit`（或 `shutdown`）关闭服务端。客户端显示的 `OK` 表示命令已被服务端处理，不表示机器人已完成动作。
 
 ## 许可证
 

@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import bpx_sdk
 from example_options import parse_options
+from example_feedback import format_power_state, format_control_mode, print_identity_availability
 
 
 def print_version():
@@ -34,7 +35,6 @@ def format_values(values, count=6):
 def print_robot_status(joint_level_control):
     current_state = joint_level_control.getCurrentMotionState()
     current_gait = joint_level_control.getCurrentGait()
-    battery_level = joint_level_control.getBatteryLevel()
     joint_timestamp = joint_level_control.getJointStateTimestampHighRate()
     joint_seq = joint_level_control.getJointStateSeqHighRate()
     rpy = joint_level_control.getImuRpyHighRate()
@@ -42,11 +42,9 @@ def print_robot_status(joint_level_control):
     joint_vel = joint_level_control.getJointVelocityHighRate()
     joint_tau = joint_level_control.getJointTorqueHighRate()
 
-    parts = ["[state]"]
+    parts = ["[state]", f"control_mode={format_control_mode(joint_level_control)} {format_power_state(joint_level_control)}"]
     if current_state is not None and current_gait is not None:
         parts.append(f"motion={current_state} gait={current_gait}")
-    if battery_level is not None:
-        parts.append(f"battery={battery_level}%")
     if joint_timestamp is not None and joint_seq is not None:
         parts.append(f"high_rate_seq={joint_seq} high_rate_t={joint_timestamp:.3f}")
     if rpy is not None:
@@ -151,6 +149,7 @@ def main():
 
     try:
         print_robot_version(joint_level_control)
+        print_identity_availability(joint_level_control)
 
         # connect() starts the TCP subscription asynchronously. Do not use the
         # first high-rate UDP state as proof that JointLevelControl is ready to

@@ -1,6 +1,7 @@
 #include "joint_level_control.h"
 #include "bpx_sdk_version.h"
 #include "example_options.h"
+#include "example_feedback.h"
 
 #include <array>
 #include <chrono>
@@ -42,7 +43,6 @@ void printRobotVersion(const bpx_sdk::RequestRobotState& robot_state) {
 void printRobotStatus(bpx_sdk::JointLevelControl& joint_level_control) {
     uint8_t current_state = 0;
     uint8_t current_gait = 0;
-    uint8_t battery_level = 0;
     float joint_timestamp = 0.0f;
     uint32_t joint_seq = 0;
     std::array<float, 3> rpy{};
@@ -53,7 +53,6 @@ void printRobotStatus(bpx_sdk::JointLevelControl& joint_level_control) {
     const bool has_motion_state =
         joint_level_control.getCurrentMotionState(&current_state) &&
         joint_level_control.getCurrentGait(&current_gait);
-    const bool has_battery = joint_level_control.getBatteryLevel(&battery_level);
     const bool has_joint_time =
         joint_level_control.getJointStateTimestampHighRate(&joint_timestamp) &&
         joint_level_control.getJointStateSeqHighRate(&joint_seq);
@@ -64,13 +63,12 @@ void printRobotStatus(bpx_sdk::JointLevelControl& joint_level_control) {
         joint_level_control.getJointTorqueHighRate(joint_tau.data());
 
     std::cout << std::fixed << std::setprecision(3);
-    std::cout << "[state]";
+    std::cout << "[state] control_mode="
+              << bpx_sdk::example::formatControlMode(joint_level_control)
+              << " " << bpx_sdk::example::formatPowerState(joint_level_control);
     if (has_motion_state) {
         std::cout << " motion=" << static_cast<int>(current_state)
                   << " gait=" << static_cast<int>(current_gait);
-    }
-    if (has_battery) {
-        std::cout << " battery=" << static_cast<int>(battery_level) << "%";
     }
     if (has_joint_time) {
         std::cout << " high_rate_seq=" << joint_seq
@@ -221,6 +219,7 @@ int main(int argc, char** argv) {
     }
 
     printRobotVersion(joint_level_control);
+    bpx_sdk::example::printIdentityAvailability(joint_level_control);
 
     // connect() starts the TCP subscription asynchronously.  Do not use the
     // first high-rate UDP state as proof that JointLevelControl is ready to

@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <string>
 
 namespace bpx_sdk {
 
@@ -16,6 +17,9 @@ public:
     RequestRobotState();
     virtual ~RequestRobotState();
 
+    // Queries SN/model over TCP and logs the result before starting the
+    // background subscription. Unsupported queries time out without failing
+    // connect(). Automatic reconnects refresh identity over TCP as well.
     virtual bool connect();
     virtual void disconnect();
     bool isConnected() const;
@@ -43,6 +47,19 @@ public:
                          uint32_t* commit = nullptr, uint32_t* build_date = nullptr,
                          uint32_t* build_time = nullptr) const;
 
+    // Current velocity-control source from TCP subscription feedback.
+    // False/nullopt until supported feedback arrives; cleared on disconnect.
+    bool getControlMode(ControlMode* mode) const;
+    std::optional<ControlMode> getControlModeValue() const;
+
+    // Identity cached by the synchronous TCP query during connect/reconnect.
+    // False if the query fails or the robot does not support it.
+    // A received empty SN means the robot could not read its whole-robot SN.
+    bool getRobotSerialNumber(std::string* serial_number) const;
+    bool getRobotModel(RobotModel* model) const;
+    std::optional<std::string> getRobotSerialNumberValue() const;
+    std::optional<RobotModel> getRobotModelValue() const;
+
     bool getJointPosition(float joint_pos[12]) const;
     bool getJointVelocity(float joint_vel[12]) const;
     bool getJointTorque(float joint_tau[12]) const;
@@ -69,6 +86,10 @@ public:
 
     bool getBatteryLevel(uint8_t* battery_level) const;
     bool getBatteryCurrent(float* battery_current) const;
+    // Decode 1 Hz battery flags to 0 (removed) / 1 (inserted).
+    // Requires robot firmware using the same bitmask charger encoding.
+    bool getChargerIn1(uint8_t* charger_in1) const;
+    bool getChargerIn2(uint8_t* charger_in2) const;
     bool getJointStateTimestamp(uint32_t* time_ms) const;
     bool getImuTimestamp(uint32_t* time_ms) const;
     bool getOdometryTimestamp(uint32_t* time_ms) const;
@@ -101,6 +122,8 @@ public:
 
     std::optional<uint8_t> getBatteryLevelValue() const;
     std::optional<float> getBatteryCurrentValue() const;
+    std::optional<uint8_t> getChargerIn1Value() const;
+    std::optional<uint8_t> getChargerIn2Value() const;
     std::optional<uint32_t> getJointStateTimestampValue() const;
     std::optional<uint32_t> getImuTimestampValue() const;
     std::optional<uint32_t> getOdometryTimestampValue() const;

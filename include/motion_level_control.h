@@ -22,8 +22,15 @@ public:
     void setRunning();
     void setLeftFlip();
     void setRightFlip();
+    // BPX only; BPX-Pro ignores bipedal commands.
     void setBipedal();
     void setInvBipedal();
+    // BPX jump actions; each call requests one jump.
+    void setUpJump();
+    void setFrontJump();
+    void setBackJump();
+    void setLeftJump();
+    void setRightJump();
     void setPronk();
     void setPace();
     void setBound();

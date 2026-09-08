@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-09-08
+
+### Added
+
+- Add interoperable C++/Python server/client examples with five jump commands, robot status queries, and timestamped battery/charger feedback.
+
+- Add upward, forward, backward, leftward, and rightward jump APIs for BPX.
+- Add robot serial-number and model queries, along with the `RobotModel` enum.
+- Add current control-mode queries and the `ControlMode` enum.
+- Add Python charger-insertion state getters and display them in C++ and Python examples.
+- Add Python bindings and type hints for these APIs.
+- Synchronously query and print the serial number and model during connection
+  setup, and query them again on automatic reconnection.
+
+### Changed
+
+- Retry temporary network failures while polling build status and job details, retaining the wait timeout and run-resume instructions.
+- Build Linux x86_64 and aarch64 wheels in parallel on native runners; update progress and artifact collection for four jobs.
+- Update the bundled Linux, Windows, and macOS SDK libraries and headers to 1.0.9.
+- Refresh wheel build progress in place in supported terminals and highlight
+  success, failure, and cancellation results; retain successive progress entries
+  when output is redirected to a log.
+- Update the English and Chinese API documentation and usage examples.
+
 ## [1.0.8] - 2026-07-24
 
 ### Added
@@ -189,7 +213,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial Linux x86_64 and aarch64 shared libraries, CMake configuration, and
   C++ examples.
 
-[Unreleased]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.8...HEAD
+[Unreleased]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.9...HEAD
+[1.0.9]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/mirrormerobotics/bpx_sdk_open/releases/tag/v1.0.6

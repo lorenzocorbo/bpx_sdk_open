@@ -56,6 +56,19 @@ from ._bpx_sdk import (
 from . import _bpx_sdk as _native
 
 
+class ControlMode(IntEnum):
+    Unknown = _native.CONTROL_MODE_UNKNOWN
+    RemoteControl = _native.CONTROL_MODE_REMOTE_CONTROL
+    Navigator = _native.CONTROL_MODE_NAVIGATOR
+
+
+class RobotModel(IntEnum):
+    Unknown = _native.ROBOT_MODEL_UNKNOWN
+    BPX = _native.ROBOT_MODEL_BPX
+    BPXPro = _native.ROBOT_MODEL_BPX_PRO
+    BPW = _native.ROBOT_MODEL_BPW
+
+
 class MotionState(IntEnum):
     LyingDown = _native.MOTION_STATE_LYING_DOWN
     StandingUp = _native.MOTION_STATE_STANDING_UP
@@ -71,6 +84,7 @@ class MotionGait(IntEnum):
     WalkPhase = _native.MOTION_GAIT_WALK_PHASE
     PoseTracking = _native.MOTION_GAIT_POSE_TRACKING
     Running = _native.MOTION_GAIT_RUNNING
+    Jump = _native.MOTION_GAIT_JUMP
 
 
 class LegOdom(TypedDict):
@@ -92,4 +106,6 @@ __all__ = [
     "MotionLevelControl",
     "MotionState",
     "RequestRobotState",
+    "RobotModel",
+    "ControlMode",
 ]

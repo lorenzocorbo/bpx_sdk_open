@@ -1,9 +1,11 @@
 #include "request_robot_state.h"
 #include "bpx_sdk_version.h"
 #include "example_options.h"
+#include "example_feedback.h"
 
 #include <chrono>
 #include <cstdint>
+#include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <thread>
@@ -77,9 +79,25 @@ int main(int argc, char** argv) {
     }
 
     printRobotVersion(robot_state);
+    bpx_sdk::example::printIdentityAvailability(robot_state);
 
     while (true) {
-        std::cout << "robot state:" << std::endl;
+        const auto now = std::chrono::system_clock::now();
+        const auto seconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
+        const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - seconds).count();
+        const std::time_t timestamp = std::chrono::system_clock::to_time_t(seconds);
+        std::tm local_time{};
+#ifdef _WIN32
+        localtime_s(&local_time, &timestamp);
+#else
+        localtime_r(&timestamp, &local_time);
+#endif
+        std::cout << "robot state: " << std::put_time(&local_time, "%Y-%m-%d %H:%M:%S")
+                  << '.' << std::setw(3) << std::setfill('0') << milliseconds
+                  << std::setfill(' ') << std::endl;
+        std::cout << "  control_mode=" << bpx_sdk::example::formatControlMode(robot_state)
+                  << std::endl;
 
         float joint_pos[12] = {};
         if (robot_state.getJointPosition(joint_pos)) {
@@ -135,15 +153,7 @@ int main(int argc, char** argv) {
                       << std::endl;
         }
 
-        uint8_t battery_level = 0;
-        if (robot_state.getBatteryLevel(&battery_level)) {
-            std::cout << "  battery_level=" << static_cast<uint32_t>(battery_level) << std::endl;
-        }
-
-        float battery_current = 0.0f;
-        if (robot_state.getBatteryCurrent(&battery_current)) {
-            std::cout << "  battery_current=" << battery_current << std::endl;
-        }
+        std::cout << "  " << bpx_sdk::example::formatPowerState(robot_state) << std::endl;
 
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }

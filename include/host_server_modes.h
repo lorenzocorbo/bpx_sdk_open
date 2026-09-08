@@ -5,6 +5,10 @@
 
 namespace bpx_protocol {
 
+// SubscribeStateResp.reserved[0] identifies control-mode feedback revision 1;
+// reserved[1] carries 0=remote control, 1=navigator, 255=unknown.
+constexpr uint32_t kControlModeFeedbackTag = 0x434D0001U;
+
 enum class HostServerMode : uint8_t {
     Test = 0,
     StateQuery = 1,
@@ -12,6 +16,7 @@ enum class HostServerMode : uint8_t {
     JointControl = 3,
     VersionQuery = 4,
     TimeSync = 5,
+    IdentityQuery = 6,
 };
 
 constexpr uint8_t ToWireValue(HostServerMode mode) {

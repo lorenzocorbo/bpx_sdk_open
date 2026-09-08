@@ -9,6 +9,28 @@
 
 ## [未发布]
 
+## [1.0.9] - 2026-09-08
+
+### 新增
+
+- 新增 C++/Python server/client 示例，支持五种跳跃命令和完整状态查询，并统一时间戳、电池及充电状态打印。
+
+- 为 BPX 增加向上、向前、向后、向左和向右五种跳跃动作接口。
+- 增加整机 SN 和机型查询接口，以及 `RobotModel` 机型枚举。
+- 增加当前控制模式查询接口和 `ControlMode` 枚举。
+- 补充充电器插入状态的 Python 接口及 C++、Python 示例输出。
+- 增加上述接口的 Python 绑定和类型提示。
+- 连接初始化时同步查询并打印 SN 和机型，自动重连时重新查询。
+
+### 变更
+
+- 查询构建状态及任务详情时遇到临时网络故障自动重试，并保留等待超时和恢复运行提示。
+- Linux x86_64 与 aarch64 wheel 改用原生构建机并行构建，进度展示和产物下载同步适配四个任务。
+- 将随附的 Linux、Windows 和 macOS SDK 库及头文件更新至 1.0.9。
+- wheel 构建脚本支持终端内原地刷新进度，并高亮成功、失败和取消结果；
+  输出到日志时保留逐次进度记录。
+- 更新中英文接口说明和使用示例。
+
 ## [1.0.8] - 2026-07-24
 
 ### 新增
@@ -167,7 +189,8 @@
 - 首次提供用于机器人状态查询、运动级控制和关节级控制的 C++ SDK。
 - 首次提供 Linux x86_64 和 aarch64 共享库、CMake 配置及 C++ 示例。
 
-[未发布]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.8...HEAD
+[未发布]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.9...HEAD
+[1.0.9]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.8...v1.0.9
 [1.0.8]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.7...v1.0.8
 [1.0.7]: https://github.com/mirrormerobotics/bpx_sdk_open/compare/v1.0.6...v1.0.7
 [1.0.6]: https://github.com/mirrormerobotics/bpx_sdk_open/releases/tag/v1.0.6

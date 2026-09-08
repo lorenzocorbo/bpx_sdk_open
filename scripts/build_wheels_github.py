@@ -13,13 +13,15 @@ import subprocess
 import sys
 import tempfile
 import time
+import unicodedata
 import zipfile
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW = "build-wheels.yml"
 ARTIFACTS = {
-    "bpx-sdk-open-wheels-ubuntu-22.04": ("x86_64", "aarch64"),
+    "bpx-sdk-open-wheels-ubuntu-22.04": ("x86_64",),
+    "bpx-sdk-open-wheels-ubuntu-22.04-arm": ("aarch64",),
     "bpx-sdk-open-wheels-windows-2022": ("win_amd64",),
     "bpx-sdk-open-wheels-macos-14": ("arm64",),
 }
@@ -205,6 +207,66 @@ STEP_LABELS = {
 }
 
 
+def highlight(text, result, stream=None):
+    stream = sys.stdout if stream is None else stream
+    colors = {"in_progress": "1;33", "success": "1;32", "failure": "1;31", "timed_out": "1;31",
+              "startup_failure": "1;31", "action_required": "1;31", "cancelled": "1;33"}
+    color = colors.get(result)
+    if (not color or not stream.isatty() or "NO_COLOR" in os.environ
+            or os.environ.get("TERM") == "dumb"):
+        return text
+    return "\033[{}m{}\033[0m".format(color, text)
+
+
+class ProgressDisplay:
+    """Refresh a bounded terminal panel; keep redirected output as plain logs."""
+
+    def __init__(self):
+        self.stream = sys.stdout
+        self.live = (self.stream.isatty() and os.environ.get("TERM") != "dumb"
+                     and (os.name != "nt" or "WT_SESSION" in os.environ
+                          or "ANSICON" in os.environ))
+        self.rows = 0
+        self.size = None
+
+    @staticmethod
+    def clip(line, columns):
+        # Preserve SGR colors while counting Chinese characters as two cells.
+        tokens = re.findall(r"\x1b\[[0-9;]*m|[^\x1b]", line)
+        result = []
+        width = 0
+        for token in tokens:
+            if token.startswith("\033["):
+                result.append(token)
+                continue
+            if unicodedata.category(token).startswith("C"):
+                continue
+            cells = 0 if unicodedata.combining(token) else (
+                2 if unicodedata.east_asian_width(token) in ("W", "F") else 1)
+            if width + cells > columns - 1:
+                return "".join(result) + "…\033[0m"
+            result.append(token)
+            width += cells
+        return "".join(result)
+
+    def update(self, text, final=False):
+        if not self.live:
+            print(text, file=self.stream, flush=True)
+            return
+        size = shutil.get_terminal_size()
+        # After a resize, wrapped rows cannot be located reliably. Start anew.
+        if self.rows and size == self.size:
+            self.stream.write("\033[{}A\r\033[J".format(self.rows))
+        lines = text.splitlines()
+        if not final:
+            lines = [self.clip(line, max(2, size.columns - 1))
+                     for line in lines[:max(1, size.lines - 1)]]
+        self.stream.write("\n".join(lines) + "\n")
+        self.stream.flush()
+        self.rows = 0 if final else len(lines)
+        self.size = size
+
+
 def duration(seconds):
     seconds = max(0, int(seconds))
     return "{}分{:02d}秒".format(seconds // 60, seconds % 60)
@@ -234,9 +296,17 @@ def fetch_jobs(repo, run_id, attempt):
         page += 1
 
 
+def artifacts_for_jobs(jobs):
+    # Runs from before the native ARM split have one combined Linux artifact.
+    if any(job["name"] == "Build ubuntu-22.04 wheels" for job in jobs):
+        return {name: ("x86_64", "aarch64") if name.endswith("ubuntu-22.04") else archs
+                for name, archs in ARTIFACTS.items() if not name.endswith("ubuntu-22.04-arm")}
+    return ARTIFACTS
+
+
 def format_progress(jobs, waited):
     # Each platform has equal weight. Jobs not yet materialized count as 0%.
-    total_jobs = max(len(ARTIFACTS), len(jobs))
+    total_jobs = max(len(artifacts_for_jobs(jobs)), len(jobs))
     finished = sum(job["status"] == "completed" for job in jobs)
     succeeded = sum(job.get("conclusion") == "success" for job in jobs)
     fractions = []
@@ -249,15 +319,16 @@ def format_progress(jobs, waited):
         # A running job with only completed steps may still be registering cleanup.
         fractions.append(fraction if complete else min(fraction, 0.99))
         name = job["name"]
-        for os_name, label in (("ubuntu-22.04", "Linux x86_64/aarch64"),
+        for os_name, label in (("ubuntu-22.04-arm", "Linux aarch64"),
+                               ("ubuntu-22.04", "Linux x86_64/aarch64" if name == "Build ubuntu-22.04 wheels" else "Linux x86_64"),
                                ("windows-2022", "Windows AMD64"), ("macos-14", "macOS arm64")):
             if os_name in name:
                 name = label
                 break
-        status = STATUS_LABELS.get(job["status"], job["status"])
+        status = highlight(STATUS_LABELS.get(job["status"], job["status"]), job["status"])
         conclusion = job.get("conclusion")
         if conclusion:
-            status += " / " + STATUS_LABELS.get(conclusion, conclusion)
+            status += " / " + highlight(STATUS_LABELS.get(conclusion, conclusion), conclusion)
         details = "步骤 {}/{}".format(done, len(steps)) if steps else "等待步骤信息"
         active = [step for step in steps if step["status"] == "in_progress"]
         if active:
@@ -280,46 +351,85 @@ def format_progress(jobs, waited):
     return "\n".join([summary, *lines])
 
 
+def transient_query_error(error):
+    if isinstance(error, (OSError, subprocess.TimeoutExpired)):
+        return True
+    message = str(error).lower()
+    return any(marker in message for marker in (
+        "connection reset", "connection refused", "connection closed", "unexpected eof",
+        "i/o timeout", "timed out", "timeout", "命令执行超时", "tls handshake",
+        "temporary failure", "no such host", "network is unreachable",
+        "http 429", "http 500", "http 502", "http 503", "http 504",
+    ))
+
+
+def wait_for_next_poll(deadline, interval, run_id):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise RuntimeError("等待查询结果超时，远程构建不会因此取消。可使用 --run-id {} 恢复".format(run_id))
+    time.sleep(min(interval, remaining))
+
+
 def wait_for_run(repo, run_id, timeout, interval):
     started = time.monotonic()
     deadline = started + timeout
     previous = None
     progress_error = None
+    status_error = None
+    display = ProgressDisplay()
     print("进度按各平台已结束步骤的比例估算（含跳过或失败步骤），不代表实际编译量或剩余时间。", flush=True)
     while True:
-        run = api("repos/{}/actions/runs/{}".format(repo, run_id))
+        try:
+            run = api("repos/{}/actions/runs/{}".format(repo, run_id))
+            status_error = None
+        except (RuntimeError, OSError, subprocess.TimeoutExpired) as error:
+            if not transient_query_error(error):
+                raise
+            if display.live or str(error) != status_error:
+                display.update("暂时无法获取构建状态，将自动重试（已等待 {}）：{}".format(
+                    duration(time.monotonic() - started), error))
+            status_error = str(error)
+            wait_for_next_poll(deadline, interval, run_id)
+            continue
         if run.get("path", "").split("@", 1)[0] != ".github/workflows/" + WORKFLOW:
             raise RuntimeError("运行 {} 不属于 BPX SDK wheels 工作流".format(run_id))
         state = (run["status"], run.get("conclusion"))
-        if state != previous:
-            status = STATUS_LABELS.get(state[0], state[0])
-            conclusion = STATUS_LABELS.get(state[1], state[1])
-            print("构建状态：{}{}".format(status, " / " + conclusion if conclusion else ""), flush=True)
-            previous = state
+        status = highlight(STATUS_LABELS.get(state[0], state[0]), state[0])
+        conclusion = highlight(STATUS_LABELS.get(state[1], state[1]), state[1])
+        status_line = "构建状态：{}{}".format(status, " / " + conclusion if conclusion else "")
+        if not display.live and state != previous:
+            print(status_line, flush=True)
+        previous = state
+        progress = None
+        jobs = []
         try:
             jobs = fetch_jobs(repo, run_id, run.get("run_attempt", 1))
-            print(format_progress(jobs, time.monotonic() - started), flush=True)
+            progress = format_progress(jobs, time.monotonic() - started)
             progress_error = None
         except (RuntimeError, OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as error:
-            if str(error) != progress_error:
-                print("暂时无法获取任务进度，将继续等待构建：{}".format(error), flush=True)
-                progress_error = str(error)
+            if display.live or str(error) != progress_error:
+                progress = "暂时无法获取任务进度，将继续等待构建：{}".format(error)
+            progress_error = str(error)
+        if display.live:
+            display.update(status_line + ("\n" + progress if progress else ""),
+                           final=run["status"] == "completed")
+        elif progress:
+            display.update(progress)
         if run["status"] == "completed":
             if run.get("conclusion") != "success":
                 raise RuntimeError("构建未成功，目标目录未被修改。")
-            print("构建对应的提交：" + run["head_sha"], flush=True)
-            return
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise RuntimeError("等待超时，远程构建仍会继续。可使用 --run-id {} 恢复".format(run_id))
-        time.sleep(min(interval, remaining))
+            if jobs:
+                print("构建对应的提交：" + run["head_sha"], flush=True)
+                return artifacts_for_jobs(jobs)
+        wait_for_next_poll(deadline, interval, run_id)
 
 
-def collect_wheels(download_dir):
-    """Validate all three artifacts before updating the wheel output directory."""
+def collect_wheels(download_dir, artifacts=None):
+    """Validate all platform artifacts before updating the wheel output directory."""
+    artifacts = ARTIFACTS if artifacts is None else artifacts
     files = {}
     versions = set()
-    for artifact, architectures in ARTIFACTS.items():
+    for artifact, architectures in artifacts.items():
         root = download_dir / artifact
         if not root.is_dir() or root.is_symlink():
             raise RuntimeError("缺少 wheel 产物：" + artifact)
@@ -351,7 +461,7 @@ def collect_wheels(download_dir):
                 raise RuntimeError("不同产物存在同名但内容不同的 wheel：" + path.name)
             files[relative] = path
         for arch in architectures:
-            if artifact.endswith("ubuntu-22.04"):
+            if artifact.endswith(("ubuntu-22.04", "ubuntu-22.04-arm")):
                 covered = any(p.startswith("manylinux") and p.endswith("_" + arch) for p in platforms)
             elif artifact.endswith("macos-14"):
                 covered = any(p.startswith("macosx_") and p.endswith("_" + arch) for p in platforms)
@@ -456,19 +566,19 @@ def main(argv=None):
         run_id = dispatch(args.repo, ref)
     print("运行详情：https://github.com/{}/actions/runs/{}".format(args.repo, run_id), flush=True)
     print("如需恢复，请使用 --run-id {}，并保持 --repo / --out-dir 参数不变。".format(run_id), flush=True)
-    wait_for_run(args.repo, run_id, args.timeout, args.poll_interval)
+    artifacts = wait_for_run(args.repo, run_id, args.timeout, args.poll_interval)
 
     with tempfile.TemporaryDirectory(prefix="bpx-wheels-github-") as directory:
         download_dir = Path(directory)
-        for artifact in ARTIFACTS:
+        for artifact in artifacts:
             print("正在下载并解压：" + artifact, flush=True)
             command([
                 "gh", "run", "download", str(run_id), "--repo", "github.com/" + args.repo,
                 "--name", artifact, "--dir", str(download_dir / artifact),
             ], timeout=600)
-        files = collect_wheels(download_dir)
+        files = collect_wheels(download_dir, artifacts)
         install_package(files, prefix)
-    print("已将 {} 个 wheel 文件保存到 {}".format(len(files), prefix), flush=True)
+    print(highlight("已将 {} 个 wheel 文件保存到 {}".format(len(files), prefix), "success"), flush=True)
     if args.show_usage:
         print("正在查询用量；GitHub 账单可能有延迟，本次构建消耗可能尚未计入。", flush=True)
         if not show_usage(args.repo):
@@ -480,7 +590,7 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except (RuntimeError, OSError, ValueError, subprocess.TimeoutExpired) as error:
-        print("错误：" + str(error), file=sys.stderr)
+        print(highlight("错误：" + str(error), "failure", sys.stderr), file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt:
         print("\n已中断；已触发的远程构建仍会继续。可使用上方运行 ID 恢复。", file=sys.stderr)

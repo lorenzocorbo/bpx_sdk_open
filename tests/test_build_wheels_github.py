@@ -22,7 +22,8 @@ class WheelBuildTest(unittest.TestCase):
         (self.output / 'keep.txt').write_text('keep')
         self.calls = []
         self.platforms = {
-            'bpx-sdk-open-wheels-ubuntu-22.04': ['manylinux_2_28_x86_64', 'manylinux_2_28_aarch64'],
+            'bpx-sdk-open-wheels-ubuntu-22.04': ['manylinux_2_28_x86_64'],
+            'bpx-sdk-open-wheels-ubuntu-22.04-arm': ['manylinux_2_28_aarch64'],
             'bpx-sdk-open-wheels-windows-2022': ['win_amd64'],
             'bpx-sdk-open-wheels-macos-14': ['macosx_11_0_arm64'],
         }
@@ -37,7 +38,7 @@ class WheelBuildTest(unittest.TestCase):
         self.calls.append(args)
         if args[1] == 'api':
             if any('/jobs?' in arg for arg in args):
-                return json.dumps({'jobs': [], 'total_count': 0})
+                return json.dumps({'jobs': [{'name': 'Build ' + os + ' wheels', 'status': 'completed', 'conclusion': 'success'} for os in ('ubuntu-22.04 x86_64', 'ubuntu-22.04-arm aarch64', 'windows-2022 AMD64', 'macos-14 arm64')], 'total_count': 4})
             if 'POST' in args:
                 self.assertIn('repos/mirrormerobotics/bpx_sdk_open/actions/workflows/build-wheels.yml/dispatches', args)
                 self.assertIn('ref=master', args)
@@ -110,7 +111,7 @@ class WheelBuildTest(unittest.TestCase):
         self.assertEqual(list(self.output.iterdir()), [self.output / 'keep.txt'])
 
     def test_missing_linux_architecture_rejected(self):
-        self.platforms['bpx-sdk-open-wheels-ubuntu-22.04'].pop()
+        self.platforms['bpx-sdk-open-wheels-ubuntu-22.04-arm'] = ['manylinux_2_28_x86_64']
         with self.assertRaisesRegex(RuntimeError, '缺少目标平台'):
             self.run_script('--run-id', '123')
         self.assertEqual(list(self.output.iterdir()), [self.output / 'keep.txt'])
@@ -152,11 +153,11 @@ class ProgressTest(unittest.TestCase):
 
     def test_unregistered_platforms_do_not_claim_full_progress(self):
         result = wheels.format_progress([self.job('linux', 'completed', 'success')], 1)
-        self.assertIn('33%', result)
-        self.assertIn('另有 2 个平台任务', result)
+        self.assertIn('25%', result)
+        self.assertIn('另有 3 个平台任务', result)
 
     def test_finished_failure_is_not_reported_as_success(self):
-        jobs = [self.job('linux', 'completed', 'failure', [
+        jobs = [self.job('Build ubuntu-22.04 wheels', 'completed', 'failure', [
                     {'name': 'Build wheels', 'status': 'completed', 'conclusion': 'failure'}]),
                 self.job('windows', 'completed', 'success'), self.job('macos', 'completed', 'success')]
         result = wheels.format_progress(jobs, 100)
@@ -179,8 +180,11 @@ class ProgressTest(unittest.TestCase):
         run = {'path': '.github/workflows/build-wheels.yml', 'status': 'completed',
                'conclusion': 'success', 'head_sha': 'abcdef'}
         with mock.patch.object(wheels, 'api', return_value=run), \
-                mock.patch.object(wheels, 'fetch_jobs', side_effect=RuntimeError('HTTP 503')):
+                mock.patch.object(wheels, 'fetch_jobs', side_effect=[RuntimeError('HTTP 503'),
+                    [{'name': 'Build ubuntu-22.04 wheels', 'status': 'completed', 'conclusion': 'success'}]]) as jobs, \
+                mock.patch.object(wheels.time, 'sleep'):
             wheels.wait_for_run('owner/repo', 123, 100, 10)
+        self.assertEqual(jobs.call_count, 2)
 
 
 class RepositoryDetectionTest(unittest.TestCase):

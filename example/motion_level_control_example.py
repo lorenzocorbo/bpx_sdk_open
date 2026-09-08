@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import bpx_sdk
 from example_options import parse_options
+from example_feedback import format_power_state, format_control_mode, print_identity_availability
 
 
 class DemoPhase(Enum):
@@ -71,6 +72,7 @@ def main():
 
     try:
         print_robot_version(motion_level_control)
+        print_identity_availability(motion_level_control)
 
         print("motion level control running")
         phase = DemoPhase.WAIT
@@ -93,8 +95,11 @@ def main():
             if has_motion_state:
                 print(
                     f"motion_state={current_state} gait={current_gait} "
+                    f"control_mode={format_control_mode(motion_level_control)} {format_power_state(motion_level_control)} "
                     f"max_vel=({max_vel[0]}, {max_vel[1]}, {max_vel[2]})"
                 )
+            else:
+                print(f"control_mode={format_control_mode(motion_level_control)} {format_power_state(motion_level_control)}")
 
             if phase == DemoPhase.WAIT:
                 if not phase_announced:

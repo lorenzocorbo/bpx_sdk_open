@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <exception>
 #include <memory>
+#include <string>
 
 namespace {
 
@@ -424,6 +425,36 @@ PyObject* state_set_session_id(PyObject* self, PyObject* args) {
     Py_RETURN_NONE;
 }
 
+PyObject* state_get_robot_serial_number(PyObject* self, PyObject*) {
+    RequestRobotState* cpp = state_cpp(self);
+    if (!cpp) return nullptr;
+    try {
+        std::string serial_number;
+        if (!cpp->getRobotSerialNumber(&serial_number)) Py_RETURN_NONE;
+        return PyUnicode_FromStringAndSize(serial_number.data(),
+                                          static_cast<Py_ssize_t>(serial_number.size()));
+    } catch (const std::exception& exc) {
+        PyErr_SetString(PyExc_RuntimeError, exc.what());
+        return nullptr;
+    }
+}
+
+PyObject* state_get_control_mode(PyObject* self, PyObject*) {
+    RequestRobotState* cpp = state_cpp(self);
+    if (!cpp) return nullptr;
+    bpx_sdk::ControlMode mode = bpx_sdk::ControlMode::Unknown;
+    if (!cpp->getControlMode(&mode)) Py_RETURN_NONE;
+    return PyLong_FromLong(static_cast<long>(mode));
+}
+
+PyObject* state_get_robot_model(PyObject* self, PyObject*) {
+    RequestRobotState* cpp = state_cpp(self);
+    if (!cpp) return nullptr;
+    bpx_sdk::RobotModel model = bpx_sdk::RobotModel::Unknown;
+    if (!cpp->getRobotModel(&model)) Py_RETURN_NONE;
+    return PyLong_FromLong(static_cast<long>(model));
+}
+
 #define STATE_FLOAT_ARRAY_METHOD(py_name, cpp_name, count)           \
     PyObject* py_name(PyObject* self, PyObject*) {                   \
         return state_float_array(self, &RequestRobotState::cpp_name, count); \
@@ -463,6 +494,8 @@ STATE_U8_METHOD(state_get_last_motion_state, getLastMotionState)
 STATE_U8_METHOD(state_get_last_gait, getLastGait)
 STATE_U8_METHOD(state_get_sub_gait, getSubGait)
 STATE_U8_METHOD(state_get_battery_level, getBatteryLevel)
+STATE_U8_METHOD(state_get_charger_in1, getChargerIn1)
+STATE_U8_METHOD(state_get_charger_in2, getChargerIn2)
 
 PyObject* state_get_battery_current(PyObject* self, PyObject*) {
     return state_float(self, &RequestRobotState::getBatteryCurrent);
@@ -529,6 +562,11 @@ MOTION_VOID_METHOD(motion_set_walk, setWalk)
 MOTION_VOID_METHOD(motion_set_running, setRunning)
 MOTION_VOID_METHOD(motion_set_left_flip, setLeftFlip)
 MOTION_VOID_METHOD(motion_set_right_flip, setRightFlip)
+MOTION_VOID_METHOD(motion_set_up_jump, setUpJump)
+MOTION_VOID_METHOD(motion_set_front_jump, setFrontJump)
+MOTION_VOID_METHOD(motion_set_back_jump, setBackJump)
+MOTION_VOID_METHOD(motion_set_left_jump, setLeftJump)
+MOTION_VOID_METHOD(motion_set_right_jump, setRightJump)
 MOTION_VOID_METHOD(motion_set_bipedal, setBipedal)
 MOTION_VOID_METHOD(motion_set_inv_bipedal, setInvBipedal)
 MOTION_VOID_METHOD(motion_set_pronk, setPronk)
@@ -705,6 +743,9 @@ PyMethodDef StateMethods[] = {
     METHOD("setTcpLocalPort", state_set_tcp_local_port, METH_VARARGS, nullptr),
     METHOD("setSessionId", state_set_session_id, METH_VARARGS, nullptr),
     METHOD("getRobotVersion", state_get_robot_version, METH_NOARGS, nullptr),
+    METHOD("getRobotSerialNumber", state_get_robot_serial_number, METH_NOARGS, "Return the whole-robot SN, or None before identity is available."),
+    METHOD("getControlMode", state_get_control_mode, METH_NOARGS, "Return a ControlMode integer, or None when feedback is unavailable."),
+    METHOD("getRobotModel", state_get_robot_model, METH_NOARGS, "Return a RobotModel integer, or None before identity is available."),
     METHOD("getJointPosition", state_get_joint_position, METH_NOARGS, nullptr),
     METHOD("getJointVelocity", state_get_joint_velocity, METH_NOARGS, nullptr),
     METHOD("getJointTorque", state_get_joint_torque, METH_NOARGS, nullptr),
@@ -722,6 +763,8 @@ PyMethodDef StateMethods[] = {
     METHOD("getSubGait", state_get_sub_gait, METH_NOARGS, nullptr),
     METHOD("getMaxVelocity", state_get_max_velocity, METH_NOARGS, nullptr),
     METHOD("getBatteryLevel", state_get_battery_level, METH_NOARGS, nullptr),
+    METHOD("getChargerIn1", state_get_charger_in1, METH_NOARGS, "Return 0 (removed), 1 (inserted), or None before feedback arrives."),
+    METHOD("getChargerIn2", state_get_charger_in2, METH_NOARGS, "Return 0 (removed), 1 (inserted), or None before feedback arrives."),
     METHOD("getBatteryCurrent", state_get_battery_current, METH_NOARGS, nullptr),
     METHOD("getJointStateTimestamp", state_get_joint_state_timestamp, METH_NOARGS, nullptr),
     METHOD("getImuTimestamp", state_get_imu_timestamp, METH_NOARGS, nullptr),
@@ -743,6 +786,9 @@ PyMethodDef MotionMethods[] = {
     METHOD("setTcpLocalPort", state_set_tcp_local_port, METH_VARARGS, nullptr),
     METHOD("setSessionId", state_set_session_id, METH_VARARGS, nullptr),
     METHOD("getRobotVersion", state_get_robot_version, METH_NOARGS, nullptr),
+    METHOD("getRobotSerialNumber", state_get_robot_serial_number, METH_NOARGS, "Return the whole-robot SN, or None before identity is available."),
+    METHOD("getControlMode", state_get_control_mode, METH_NOARGS, "Return a ControlMode integer, or None when feedback is unavailable."),
+    METHOD("getRobotModel", state_get_robot_model, METH_NOARGS, "Return a RobotModel integer, or None before identity is available."),
     METHOD("getJointPosition", state_get_joint_position, METH_NOARGS, nullptr),
     METHOD("getJointVelocity", state_get_joint_velocity, METH_NOARGS, nullptr),
     METHOD("getJointTorque", state_get_joint_torque, METH_NOARGS, nullptr),
@@ -760,6 +806,8 @@ PyMethodDef MotionMethods[] = {
     METHOD("getSubGait", state_get_sub_gait, METH_NOARGS, nullptr),
     METHOD("getMaxVelocity", state_get_max_velocity, METH_NOARGS, nullptr),
     METHOD("getBatteryLevel", state_get_battery_level, METH_NOARGS, nullptr),
+    METHOD("getChargerIn1", state_get_charger_in1, METH_NOARGS, "Return 0 (removed), 1 (inserted), or None before feedback arrives."),
+    METHOD("getChargerIn2", state_get_charger_in2, METH_NOARGS, "Return 0 (removed), 1 (inserted), or None before feedback arrives."),
     METHOD("getBatteryCurrent", state_get_battery_current, METH_NOARGS, nullptr),
     METHOD("getJointStateTimestamp", state_get_joint_state_timestamp, METH_NOARGS, nullptr),
     METHOD("getImuTimestamp", state_get_imu_timestamp, METH_NOARGS, nullptr),
@@ -773,6 +821,11 @@ PyMethodDef MotionMethods[] = {
     METHOD("setRunning", motion_set_running, METH_NOARGS, nullptr),
     METHOD("setLeftFlip", motion_set_left_flip, METH_NOARGS, nullptr),
     METHOD("setRightFlip", motion_set_right_flip, METH_NOARGS, nullptr),
+    METHOD("setUpJump", motion_set_up_jump, METH_NOARGS, "Request one BPX jump."),
+    METHOD("setFrontJump", motion_set_front_jump, METH_NOARGS, "Request one BPX jump."),
+    METHOD("setBackJump", motion_set_back_jump, METH_NOARGS, "Request one BPX jump."),
+    METHOD("setLeftJump", motion_set_left_jump, METH_NOARGS, "Request one BPX jump."),
+    METHOD("setRightJump", motion_set_right_jump, METH_NOARGS, "Request one BPX jump."),
     METHOD("setBipedal", motion_set_bipedal, METH_NOARGS, nullptr),
     METHOD("setInvBipedal", motion_set_inv_bipedal, METH_NOARGS, nullptr),
     METHOD("setPronk", motion_set_pronk, METH_NOARGS, nullptr),
@@ -798,6 +851,9 @@ PyMethodDef JointMethods[] = {
     METHOD("setTcpLocalPort", state_set_tcp_local_port, METH_VARARGS, nullptr),
     METHOD("setSessionId", state_set_session_id, METH_VARARGS, nullptr),
     METHOD("getRobotVersion", state_get_robot_version, METH_NOARGS, nullptr),
+    METHOD("getRobotSerialNumber", state_get_robot_serial_number, METH_NOARGS, "Return the whole-robot SN, or None before identity is available."),
+    METHOD("getControlMode", state_get_control_mode, METH_NOARGS, "Return a ControlMode integer, or None when feedback is unavailable."),
+    METHOD("getRobotModel", state_get_robot_model, METH_NOARGS, "Return a RobotModel integer, or None before identity is available."),
     METHOD("getJointPosition", state_get_joint_position, METH_NOARGS, nullptr),
     METHOD("getJointVelocity", state_get_joint_velocity, METH_NOARGS, nullptr),
     METHOD("getJointTorque", state_get_joint_torque, METH_NOARGS, nullptr),
@@ -815,6 +871,8 @@ PyMethodDef JointMethods[] = {
     METHOD("getSubGait", state_get_sub_gait, METH_NOARGS, nullptr),
     METHOD("getMaxVelocity", state_get_max_velocity, METH_NOARGS, nullptr),
     METHOD("getBatteryLevel", state_get_battery_level, METH_NOARGS, nullptr),
+    METHOD("getChargerIn1", state_get_charger_in1, METH_NOARGS, "Return 0 (removed), 1 (inserted), or None before feedback arrives."),
+    METHOD("getChargerIn2", state_get_charger_in2, METH_NOARGS, "Return 0 (removed), 1 (inserted), or None before feedback arrives."),
     METHOD("getBatteryCurrent", state_get_battery_current, METH_NOARGS, nullptr),
     METHOD("getJointStateTimestamp", state_get_joint_state_timestamp, METH_NOARGS, nullptr),
     METHOD("getImuTimestamp", state_get_imu_timestamp, METH_NOARGS, nullptr),
@@ -946,6 +1004,15 @@ PyMODINIT_FUNC PyInit__bpx_sdk() {
     add_int_constant(module, "MOTION_GAIT_WALK_PHASE", static_cast<long>(bpx_sdk::MotionGait::WalkPhase));
     add_int_constant(module, "MOTION_GAIT_POSE_TRACKING", static_cast<long>(bpx_sdk::MotionGait::PoseTracking));
     add_int_constant(module, "MOTION_GAIT_RUNNING", static_cast<long>(bpx_sdk::MotionGait::Running));
+    add_int_constant(module, "MOTION_GAIT_JUMP", static_cast<long>(bpx_sdk::MotionGait::Jump));
+    add_int_constant(module, "CONTROL_MODE_UNKNOWN", static_cast<long>(bpx_sdk::ControlMode::Unknown));
+    add_int_constant(module, "CONTROL_MODE_REMOTE_CONTROL", static_cast<long>(bpx_sdk::ControlMode::RemoteControl));
+    add_int_constant(module, "CONTROL_MODE_NAVIGATOR", static_cast<long>(bpx_sdk::ControlMode::Navigator));
+    add_int_constant(module, "ROBOT_MODEL_UNKNOWN", static_cast<long>(bpx_sdk::RobotModel::Unknown));
+    add_int_constant(module, "ROBOT_MODEL_BPX", static_cast<long>(bpx_sdk::RobotModel::BPX));
+    add_int_constant(module, "ROBOT_MODEL_BPX_PRO", static_cast<long>(bpx_sdk::RobotModel::BPXPro));
+    add_int_constant(module, "ROBOT_MODEL_BPW", static_cast<long>(bpx_sdk::RobotModel::BPW));
+
 
     return module;
 }

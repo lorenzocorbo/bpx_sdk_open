@@ -1,11 +1,13 @@
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import bpx_sdk
 from example_options import parse_options
+from example_feedback import format_power_state, format_control_mode, print_identity_availability
 
 
 def print_version():
@@ -50,15 +52,16 @@ def main():
 
     try:
         print_robot_version(robot_state)
+        print_identity_availability(robot_state)
 
         while True:
             joint_pos = robot_state.getJointPosition()
             rpy = robot_state.getImuRpy()
             leg_odom = robot_state.getLegOdom()
             max_vel = robot_state.getMaxVelocity()
-            battery = robot_state.getBatteryLevel()
 
-            print("robot state:")
+            print(f"robot state: {datetime.now().isoformat(sep=' ', timespec='milliseconds')}")
+            print(f"  control_mode={format_control_mode(robot_state)}")
             if joint_pos is not None:
                 print(f"  joint_pos[0]={joint_pos[0]:.3f}")
             if rpy is not None:
@@ -84,8 +87,7 @@ def main():
                     f"  max_vel=({max_vel[0]:.3f}, "
                     f"{max_vel[1]:.3f}, {max_vel[2]:.3f})"
                 )
-            if battery is not None:
-                print(f"  battery_level={battery}%")
+            print(f"  {format_power_state(robot_state)}")
 
             time.sleep(0.2)
     finally:
