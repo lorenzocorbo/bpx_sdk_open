@@ -450,6 +450,61 @@ GitHub Actions, the full configured CPython matrix is built.
 
 The GitHub Actions workflow in `.github/workflows/build-wheels.yml` builds wheel artifacts for Windows AMD64, Linux x86_64/aarch64, and macOS arm64. Run it manually from the Actions tab or push a `v*` tag. The generated wheels are uploaded as workflow artifacts and can be installed with:
 
+### 通过脚本远程构建并下载 wheels
+
+安装 Python 3.8+ 和 GitHub CLI，并执行 `gh auth login` 后，可直接运行：
+
+```bash
+./scripts/build_wheels_github.py --ref master
+```
+
+Windows 可使用 `python scripts/build_wheels_github.py --ref master`。
+脚本会触发 `build-wheels.yml`，等待三端构建成功，下载并解压 Actions artifact，
+将 `.whl` 文件汇总到本仓库的 `wheelhouse/`；wheel 本身保持原样，供 pip 安装。
+可用 `--out-dir` 指定输出目录，路径含空格时加引号：
+
+```bash
+./scripts/build_wheels_github.py --ref master --out-dir /path/to/wheelhouse
+```
+
+默认从当前仓库的 `origin` 自动识别 GitHub 仓库；本项目通常为
+`mirrormerobotics/bpx_sdk_open`，fork 后默认指向自己的 fork，避免误触发上游。
+支持标准 GitHub HTTPS、SSH URL，可用 `--repo OWNER/REPO` 覆盖；无法识别时要求显式指定。
+未指定 `--ref` 时使用当前本地分支名对应的远程分支，本项目默认分支为 `master`。**构建使用已推送的远程代码和 SDK 库**，本地新下载但
+未提交、未推送的 `.so`、`.dll`、`.lib`、`.dylib` 及版本头不会参与远程构建。
+脚本通过 GitHub API 返回的 run ID 跟踪本次运行，默认每 10 秒查询一次，最多等待 7200 秒，
+可用 `--poll-interval`、`--timeout` 调整。依赖 GitHub.com 的 `2026-03-10` API。
+每次轮询会显示各平台任务状态、当前步骤、步骤计数、任务耗时及整体估算百分比。
+百分比按各平台已结束步骤的比例等权计算（含失败、跳过步骤），未出现的平台按 0% 计，
+不代表真实编译量、成功率或剩余时间。`Build wheels` 内部包含多个 Python 版本的构建，
+GitHub 的步骤接口不提供其内部百分比，因此该阶段可能长时间保持同一比例；耗时仍会更新。
+失败时会显示异常步骤及任务链接。查询进度详情暂时失败不影响继续等待整体构建状态。
+
+三端产物先下载到临时目录，再检查 wheel ZIP 完整性、元数据、包版本一致性，以及
+Linux x86_64/aarch64、Windows AMD64、macOS arm64 平台覆盖。全部通过后才写入输出目录。
+同名 wheel 会替换，其他文件保留；不会自动安装 Python 包。现有 workflow 负责完整的
+CPython 构建矩阵及 wheel 导入测试，下载脚本不重复验证每个 Python 版本。
+
+触发新构建需要目标仓库的写权限；普通用户可登录 GitHub CLI 后，用 `--run-id` 下载
+上游已有的产物（需有读取权限且产物尚未过期），或者 fork 后在自己的仓库触发构建。
+如果 `origin` 指向自己的 fork，而要下载上游产物，请同时指定
+`--repo mirrormerobotics/bpx_sdk_open`。
+
+等待超时或 Ctrl+C 不会取消远程构建。可使用打印的运行 ID 恢复等待和下载：
+
+```bash
+./scripts/build_wheels_github.py --run-id 123456789 --out-dir /path/to/wheelhouse
+```
+
+所有进度、帮助和脚本提示均为中文，命令、路径及 GitHub 原始标识保留原文。
+默认不查询账户账单。维护者可添加 `--show-usage`，在下载完成后显示 Actions 用量、
+套餐标准额度和按历史倍率估算的剩余分钟；仅查询用量则使用 `--usage-only`。
+公共仓库使用标准 GitHub 托管 runner 免费，但账单查询统计的是所属账户的所有仓库。
+查询组织账单需要管理员身份及相应 token 权限，普通用户不需要申请账单权限来下载产物。
+账单可能延迟，估算不是 GitHub 确认的余额；`--show-usage` 查询失败不影响下载成功的退出状态，
+`--usage-only` 查询失败则返回非零状态。
+此脚本不会改变现有 workflow 的自动触发规则，也不会发布 Release 或上传 PyPI。
+
 To install from a local wheelhouse:
 
 ```bash
