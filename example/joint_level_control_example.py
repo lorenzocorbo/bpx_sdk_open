@@ -152,12 +152,19 @@ def main():
     try:
         print_robot_version(joint_level_control)
 
+        # connect() starts the TCP subscription asynchronously. Do not use the
+        # first high-rate UDP state as proof that JointLevelControl is ready to
+        # accept a command.
+        print("waiting for TCP control connection...")
+        while not joint_level_control.isConnected():
+            time.sleep(0.001)
+
         init_pos = None
+        print("waiting for initial high-rate joint position...")
         while init_pos is None:
             init_pos = joint_level_control.getJointPositionHighRate()
             if init_pos is None:
-                print("waiting for initial high-rate joint position...")
-                time.sleep(0.1)
+                time.sleep(0.001)
 
         first_target_pos = make_leg_target(0.0, 0.8, -1.8)
         second_target_pos = make_leg_target(0.0, 1.2, -2.7)
@@ -166,8 +173,11 @@ def main():
         kd = [2.0] * bpx_sdk.JOINT_COUNT
         vel = [0.0] * bpx_sdk.JOINT_COUNT
         tff = [0.0] * bpx_sdk.JOINT_COUNT
-        if not joint_level_control.setJointCommand(kp, init_pos, kd, vel, tff):
-            raise RuntimeError("failed to set initial joint gains")
+        initial_command_deadline = time.monotonic() + 1.0
+        while not joint_level_control.setJointCommand(kp, init_pos, kd, vel, tff):
+            if time.monotonic() >= initial_command_deadline:
+                raise RuntimeError("failed to set initial joint gains")
+            time.sleep(0.001)
 
         next_status_print = time.monotonic()
         hold_duration = 1.0
